@@ -69,8 +69,9 @@ public delegate ValueTask<CommandResult<TMsg>> CommandExecutor<in TCmd, TMsg>(
     TCmd command, Dispatch<TMsg> dispatch, CancellationToken cancellationToken);
 
 // Start a subscription. Returns IAsyncDisposable - the runtime calls DisposeAsync to cancel.
+// onError routes ongoing exceptions (tick handlers, event handlers) as PambaError.SubscriptionFaulted.
 public delegate IAsyncDisposable SubscriptionStarter<in TSub, TMsg>(
-    TSub subscription, Dispatch<TMsg> dispatch)
+    TSub subscription, Dispatch<TMsg> dispatch, Action<Exception> onError)
     where TSub : ISubscription<TMsg>;
 
 // Strongly-typed subscription key.

@@ -66,22 +66,25 @@ that alters the selected value, receiving both old and new values.
 ## Timer Subscriptions
 
 Pre-built helpers for timer-based subscriptions. Use them inside your
-`SubscriptionStarter` delegate to handle specific subscription types:
+`SubscriptionStarter` delegate. Pass through the `onError` callback from the runtime
+so tick/event handler exceptions route as `PambaError.SubscriptionFaulted`:
 
 ```csharp
-IAsyncDisposable StartSubscription(Sub subscription, Dispatch<Msg> dispatch) =>
+IAsyncDisposable StartSubscription(Sub subscription, Dispatch<Msg> dispatch, Action<Exception> onError) =>
     subscription switch
     {
       Sub.RefreshTimer t => TimerSubscription.Start(
           interval: t.Interval,
           createMessage: () => new Msg.RefreshTick(),
           dispatch: dispatch,
+          onError: onError,
           dispatcherQueue: _dispatcherQueue),
 
       Sub.SearchDebounce d => DelayedSubscription.Start(
           delay: d.Delay,
           createMessage: () => new Msg.DebounceComplete(),
           dispatch: dispatch,
+          onError: onError,
           dispatcherQueue: _dispatcherQueue),
 
       _ => throw new InvalidOperationException($"Unknown subscription: {subscription}")
@@ -102,6 +105,7 @@ Sub.LocaleChanged s => PropertyChangedSubscription.Start(
     propertyName: "Current",
     createMessage: () => new Msg.LocaleChanged(localeHost.Current.Culture.Name),
     dispatch: dispatch,
+    onError: onError,
     dispatcherQueue: _dispatcherQueue),
 ```
 

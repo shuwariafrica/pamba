@@ -33,6 +33,16 @@ public abstract record PambaError
       Exception Cause) : PambaError;
 
   /// <summary>
+  /// An active subscription threw an exception during its ongoing operation (tick handler,
+  /// event handler). The subscription remains active; the exception is routed for handling.
+  /// </summary>
+  /// <param name="Key">The subscription key whose handler threw.</param>
+  /// <param name="Cause">The exception thrown during the subscription's operation.</param>
+  public sealed record SubscriptionFaulted(
+      SubscriptionKey Key,
+      Exception Cause) : PambaError;
+
+  /// <summary>
   /// The <see cref="MvuProgram{TState,TMsg,TCmd,TSub}.Subscriptions"/> function returned
   /// multiple subscriptions with the same <see cref="SubscriptionKey"/>. First occurrence wins;
   /// duplicates are skipped.

@@ -16,13 +16,13 @@ namespace Pamba;
 internal sealed class SubscriptionManager<TSub, TMsg> : IAsyncDisposable
     where TSub : IEquatable<TSub>, ISubscription<TMsg>
 {
-  private readonly SubscriptionStarter<TSub, TMsg> _starter;
+  private readonly Func<TSub, Dispatch<TMsg>, IAsyncDisposable> _starter;
   private readonly Action<PambaError> _onError;
   private readonly Dictionary<SubscriptionKey, (TSub Subscription, IAsyncDisposable Handle)> _active;
   private readonly HashSet<SubscriptionKey> _currentKeys;
   private readonly List<SubscriptionKey> _removalBuffer;
 
-  internal SubscriptionManager(SubscriptionStarter<TSub, TMsg> starter, Action<PambaError> onError)
+  internal SubscriptionManager(Func<TSub, Dispatch<TMsg>, IAsyncDisposable> starter, Action<PambaError> onError)
   {
     _starter = starter;
     _onError = onError;

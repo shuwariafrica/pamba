@@ -100,7 +100,7 @@ public sealed class MvuRuntimeTests
   private static ValueTask<CommandResult<TestMsg>> NoOpExecutor(TestCmd cmd, Dispatch<TestMsg> dispatch, CancellationToken ct) =>
       ValueTask.FromResult(CommandResult<TestMsg>.Ok);
 
-  private static IAsyncDisposable NoOpStarter(TestSub sub, Dispatch<TestMsg> dispatch) =>
+  private static IAsyncDisposable NoOpStarter(TestSub sub, Dispatch<TestMsg> dispatch, Action<Exception> onError) =>
       new TrackingAsyncDisposable();
 
   [Fact]
@@ -219,7 +219,7 @@ public sealed class MvuRuntimeTests
   public void Dispatch_starts_subscriptions_when_state_activates_them()
   {
     List<string> startedKeys = [];
-    IAsyncDisposable TrackingStarter(TestSub sub, Dispatch<TestMsg> dispatch)
+    IAsyncDisposable TrackingStarter(TestSub sub, Dispatch<TestMsg> dispatch, Action<Exception> onError)
     {
       startedKeys.Add(sub.Key.Value);
       return new TrackingAsyncDisposable();
@@ -240,7 +240,7 @@ public sealed class MvuRuntimeTests
   public void Dispatch_cancels_subscriptions_when_state_deactivates_them()
   {
     Dictionary<string, TrackingAsyncDisposable> handles = [];
-    IAsyncDisposable TrackingStarter(TestSub sub, Dispatch<TestMsg> dispatch)
+    IAsyncDisposable TrackingStarter(TestSub sub, Dispatch<TestMsg> dispatch, Action<Exception> onError)
     {
       TrackingAsyncDisposable handle = new();
       handles[sub.Key.Value] = handle;
@@ -300,7 +300,7 @@ public sealed class MvuRuntimeTests
   public void Dispose_cancels_all_active_subscriptions()
   {
     Dictionary<string, TrackingAsyncDisposable> handles = [];
-    IAsyncDisposable TrackingStarter(TestSub sub, Dispatch<TestMsg> dispatch)
+    IAsyncDisposable TrackingStarter(TestSub sub, Dispatch<TestMsg> dispatch, Action<Exception> onError)
     {
       TrackingAsyncDisposable handle = new();
       handles[sub.Key.Value] = handle;
@@ -361,7 +361,7 @@ public sealed class MvuRuntimeTests
       Validate = ValidationResult<TestState, TestMsg>.AlwaysValid
     };
 
-    IAsyncDisposable ThrowingStarter(TestSub sub, Dispatch<TestMsg> dispatch) =>
+    IAsyncDisposable ThrowingStarter(TestSub sub, Dispatch<TestMsg> dispatch, Action<Exception> onError) =>
         throw new InvalidOperationException("Timer init failed");
 
     using MvuRuntime<TestState, TestMsg, TestCmd, TestSub> runtime =
@@ -526,7 +526,7 @@ public sealed class MvuRuntimeTests
         .WithCommandExecutor(
             (TestCmd cmd, Dispatch<TestMsg> dispatch, CancellationToken ct) => ValueTask.FromResult(CommandResult<TestMsg>.Ok))
         .WithSubscriptionStarter(
-            (TestSubWithData sub, Dispatch<TestMsg> dispatch) =>
+            (TestSubWithData sub, Dispatch<TestMsg> dispatch, Action<Exception> onError) =>
             {
               if (!startedValues.TryGetValue(sub.Key.Value, out var list))
               {
@@ -601,7 +601,7 @@ public sealed class MvuRuntimeTests
       Validate = ValidationResult<TestState, TestMsg>.AlwaysValid
     };
 
-    IAsyncDisposable ThrowingStarter(TestSub sub, Dispatch<TestMsg> dispatch) =>
+    IAsyncDisposable ThrowingStarter(TestSub sub, Dispatch<TestMsg> dispatch, Action<Exception> onError) =>
         throw new InvalidOperationException("Starter failed");
 
     // Suppress trace listeners so Trace.TraceError does not surface in the test host

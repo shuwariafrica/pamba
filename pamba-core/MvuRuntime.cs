@@ -110,10 +110,13 @@ public sealed class MvuRuntime<TState, TMsg, TCmd, TSub> : IDisposable, IAsyncDi
 
     IAsyncDisposable SafeStarter(TSub sub, Dispatch<TMsg> dispatch)
     {
+      Action<Exception> onError = ex =>
+          SafeDispatchRuntimeError(new PambaError.SubscriptionFaulted(sub.Key, ex));
+
 #pragma warning disable CA1031 // Runtime boundary: subscription starter exceptions routed via OnRuntimeError
       try
       {
-        return subscriptionStarter(sub, dispatch);
+        return subscriptionStarter(sub, dispatch, onError);
       }
       catch (Exception ex)
       {
