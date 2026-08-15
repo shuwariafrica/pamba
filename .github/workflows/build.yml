@@ -98,7 +98,7 @@ jobs:
             runner: windows-11-arm
             runtime: arm64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -115,14 +115,29 @@ jobs:
         run: dotnet restore pamba-ci.slnf
 
       # Pamba.WinUI.Tests activates Windows App SDK types, which need the runtime present.
+      # A runtime whose channel does not match the package hangs the bootstrapper on a prompt.
       - name: Install Windows App SDK runtime
         shell: pwsh
         run: |
           Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
+
+          [xml]$packages = Get-Content -LiteralPath 'Directory.Packages.props'
+          $pinned = $packages.Project.ItemGroup.PackageVersion |
+            Where-Object { $_.Include -eq 'Microsoft.WindowsAppSDK' }
+          if (-not $pinned) { throw 'Microsoft.WindowsAppSDK is not pinned in Directory.Packages.props' }
+
+          $channel = ($pinned.Version -split '\.')[0, 1] -join '.'
+          $uri = "https://aka.ms/windowsappsdk/$channel/latest/windowsappruntimeinstall-${{ matrix.runtime }}.exe"
           $installer = Join-Path $env:RUNNER_TEMP 'WindowsAppRuntimeInstall.exe'
-          $uri = 'https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-${{ matrix.runtime }}.exe'
           Invoke-WebRequest -Uri $uri -OutFile $installer
+
+          # An unknown channel redirects to a search page and still returns 200, so confirm a PE.
+          $header = [System.IO.File]::ReadAllBytes($installer) | Select-Object -First 2
+          if ($header[0] -ne 0x4D -or $header[1] -ne 0x5A) {
+            throw "No Windows App SDK $channel runtime installer at $uri"
+          }
+
           & $installer --quiet --force
           if ($LASTEXITCODE -ne 0) { throw "Windows App SDK runtime install failed: $LASTEXITCODE" }
 
