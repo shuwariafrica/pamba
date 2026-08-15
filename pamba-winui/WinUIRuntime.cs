@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
@@ -108,8 +108,7 @@ public static class WinUIRuntime
       return this;
     }
 
-    // Explicit interface implementation: IWinUIConfigurable also exposes WithMaxHistorySize
-    // for the no-projection Start() path.
+    // IWinUIConfigurable exposes WithMaxHistorySize too, for the no-projection Start() path.
     IWinUIConfigurable<TState, TMsg, TCmd, TSub>
         IWinUIConfigurable<TState, TMsg, TCmd, TSub>.WithMaxHistorySize(int maxSize)
     {
@@ -120,8 +119,7 @@ public static class WinUIRuntime
 
     public MvuRuntime<TState, TMsg, TCmd, TSub> Start()
     {
-      // TryEnqueue returns bool: true if the action was enqueued, false if the queue has shut down.
-      // The bool is propagated to MvuRuntime which routes false as PambaError.DispatchRejected.
+      // A false from TryEnqueue reaches MvuRuntime as PambaError.DispatchRejected.
       Func<Action, bool> enqueue = action => _dispatcherQueue.TryEnqueue(() => action());
 
       IRuntimeNeedsDispatcher<TState, TMsg, TCmd, TSub> withSubs = MvuRuntimeBuilder

@@ -7,6 +7,13 @@
     <TargetPlatformMinVersion>10.0.22621.0</TargetPlatformMinVersion>
     <RootNamespace>Pamba.WinUI.Tests</RootNamespace>
     <AssemblyName>Pamba.WinUI.Tests</AssemblyName>
+
+    <!--
+      The Windows App SDK emits its bootstrap auto-initialiser only for projects producing an
+      executable. Without this opt-in a test DLL fails every WinRT activation with
+      REGDB_E_CLASSNOTREG.
+    -->
+    <WindowsAppSdkBootstrapInitialize>true</WindowsAppSdkBootstrapInitialize>
   </PropertyGroup>
 
   <ItemGroup>

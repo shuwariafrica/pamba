@@ -89,8 +89,8 @@ at index 0, followed by one entry per `Dispatch` call.
 
 - **Pamba** - Framework-agnostic core: contracts, dispatch loop, command/subscription infrastructure,
   transition pipeline (`program.Step()` / `program.Initialize()`).
-- **Pamba.WinUI** - WinUI 3 integration with `DispatcherQueue`, `Projection`,
-  timer/event subscription helpers, and command debouncer.
+- **Pamba.WinUI** - WinUI 3 integration with `DispatcherQueue`, timer/event subscription
+  helpers, and command debouncer.
 
 ## Licence
 

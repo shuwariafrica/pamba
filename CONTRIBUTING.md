@@ -40,8 +40,9 @@ dotnet build Pamba.Root.csproj
 ```
 
 Markdown is linted by [rumdl](https://github.com/rvben/rumdl). The pinned binary is downloaded automatically to
-`.tools/rumdl/` on first build. Update `RumdlVersion` in `build/markdown.targets` to upgrade - the next build downloads
-the new binary.
+`.tools/rumdl/` on first build, and its SHA-256 is verified before it is unpacked. To upgrade, set both
+`RumdlVersion` and `RumdlSha256` in `build/markdown.targets` - the checksum is published beside the release archive
+as a `.sha256` file. A download that does not match is deleted and fails the build.
 
 ## Project Structure
 
@@ -57,18 +58,34 @@ the new binary.
 
 ## Build Infrastructure
 
-| File                       | Purpose                                                          |
-| -------------------------- | ---------------------------------------------------------------- |
-| `Directory.Build.props`    | Quality settings enforced across all projects                    |
-| `Directory.Packages.props` | Centralised NuGet package version management                     |
-| `build/package.props`      | Shared NuGet package metadata (imported by library csproj files) |
-| `build/test.props`         | Shared test project settings (imported by test csproj files)     |
-| `build/markdown.targets`   | rumdl download and lint targets                                  |
-| `Pamba.Root.csproj`        | Root project - builds all projects and runs markdown linting     |
-| `pamba-ci.slnf`            | CI solution filter (excludes `Pamba.Root.csproj`)                |
-| `.editorconfig`            | C# style, copyright header, and analyser rules                   |
-| `.rumdl.toml`              | Markdown lint configuration                                      |
-| `release.ps1`              | GPG-signed release tag creation and push                         |
+| File                            | Purpose                                                          |
+| ------------------------------- | ---------------------------------------------------------------- |
+| `Directory.Build.props`         | Quality settings enforced across all projects                    |
+| `Directory.Packages.props`      | Centralised NuGet package version management                     |
+| `build/package.props`           | Shared NuGet package metadata (imported by library csproj files) |
+| `build/test.props`              | Shared test project settings (imported by test csproj files)     |
+| `build/markdown.targets`        | rumdl download and lint targets                                  |
+| `Pamba.Root.csproj`             | Root project - builds all projects and runs markdown linting     |
+| `pamba-ci.slnf`                 | CI solution filter (excludes `Pamba.Root.csproj`)                |
+| `.editorconfig`                 | C# style, copyright header, and analyser rules                   |
+| `.rumdl.toml`                   | Markdown lint configuration                                      |
+| `PSScriptAnalyzerSettings.psd1` | PowerShell lint rules, shared by workstation and CI              |
+| `release.ps1`                   | GPG-signed release tag creation and push                         |
+
+## Continuous Integration
+
+| File                          | Purpose                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| `.github/workflows/build.yml` | The `ci` workflow: analysis, tests, and the tagged release                 |
+| `.github/mergify.yml`         | Merge queue and labelling, inherited from the organisation's shared config |
+| `.github/renovate.json`       | Dependency updates, inherited from the organisation's shared config        |
+| `.github/release.yml`         | Release-note categories, keyed to the labels Mergify applies               |
+
+Actions are pinned to a commit SHA with the tag in a trailing comment; move both together.
+
+Pull request labels - and therefore release-note categories - come from the commit message.
+Prefix the subject with `[feat]`, `[fix]`, `[task]`, or `[dependencies]`, and add
+`[breaking]` where it applies.
 
 ## Code Requirements
 

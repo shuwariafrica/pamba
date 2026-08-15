@@ -1,19 +1,22 @@
-name: Integration Build
+name: "ci"
 
+# Markdown is gated by the analysis job, so "**.md" must stay out of any paths-ignore here.
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
+  workflow_dispatch:
   pull_request:
     branches: [main]
-  workflow_dispatch:
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  push:
+    branches: [main]
+    tags: [v*]
 
 permissions:
   contents: read
+
+# Superseded runs are cancelled on PR branches only: cancelling a superseded main run skips
+# that commit's verification, and a cancelled tag run is a cancelled release.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 env:
   DOTNET_NOLOGO: true
@@ -22,53 +25,91 @@ env:
   CONFIGURATION: Release
 
 jobs:
-  analyse:
-    name: Static Analysis
+  analysis:
+    name: analysis
     runs-on: windows-2025
     timeout-minutes: 30
-
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           filter: tree:0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: "10.0.x"
 
       - name: Restore
         run: dotnet restore pamba.slnx
 
-      - name: Format check
+      - name: Verify Source Formatting
+        id: format
+        continue-on-error: true
         run: dotnet format pamba.slnx --no-restore --verify-no-changes
 
-      - name: Markdown lint
+      - name: Verify Markdown Conformity
+        id: markdown
+        continue-on-error: true
         run: dotnet build Pamba.Root.csproj --no-restore
 
-  build:
-    name: Build and Test
+      - name: Verify PowerShell Conformity
+        id: powershell
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
+            Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser -Repository PSGallery
+          }
+          Import-Module PSScriptAnalyzer
+          $findings = Invoke-ScriptAnalyzer -Path . -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+          if ($findings) {
+            $findings | Format-Table RuleName, Severity, ScriptName, Line, Message -AutoSize -Wrap
+            throw "PSScriptAnalyzer reported $($findings.Count) finding(s)"
+          }
+
+      - name: Check for failures
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=""
+          [[ "${{ steps.format.outcome }}" == "failure" ]] && failed="${failed} dotnet-format"
+          [[ "${{ steps.markdown.outcome }}" == "failure" ]] && failed="${failed} markdown-lint"
+          [[ "${{ steps.powershell.outcome }}" == "failure" ]] && failed="${failed} psscriptanalyzer"
+          if [[ -n "${failed}" ]]; then
+            printf '::error::Static analysis checks failed:%s\n' "${failed}"
+            exit 1
+          fi
+
+  test:
+    name: "windows / test"
     runs-on: windows-2025
     timeout-minutes: 30
-
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           filter: tree:0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: "10.0.x"
 
       - name: Restore
         run: dotnet restore pamba-ci.slnf
 
+      # Pamba.WinUI.Tests activates Windows App SDK types, which need the runtime present.
       - name: Install Windows App SDK runtime
         shell: pwsh
         run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
           $installer = Join-Path $env:RUNNER_TEMP 'WindowsAppRuntimeInstall.exe'
           Invoke-WebRequest -Uri 'https://aka.ms/windowsappsdk/1.8/latest/windowsappruntimeinstall-x64.exe' -OutFile $installer
           & $installer --quiet --force
@@ -97,81 +138,109 @@ jobs:
           --configuration ${{ env.CONFIGURATION }}
           --output ./packages
 
-      - name: Upload packages
+      - name: Upload Packages
         if: github.event_name == 'push'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: packages
           path: ./packages/**/*.*nupkg
           retention-days: 7
+          if-no-files-found: error
 
-      - name: Upload test results
-        uses: actions/upload-artifact@v7
+      - name: Upload Test Results
         if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-results
           path: ./test-results/**/*.trx
           retention-days: 7
 
-      - name: Upload coverage information
+      - name: Upload Coverage
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage
           path: ./test-results/**/coverage.cobertura.xml
           retention-days: 7
 
-  publish:
-    name: Publish Packages
-    needs: [analyse, build]
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+  release:
+    name: "publish / release"
+    needs: [analysis, test]
+    if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
-
     permissions:
       contents: write
       packages: write
       id-token: write
-
     steps:
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: "10.0.x"
 
-      - name: Download packages
-        uses: actions/download-artifact@v8
+      - name: Download Packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: packages
           path: packages
 
-      - name: NuGet login (OIDC)
-        uses: NuGet/login@v1
+      - name: Verify Packages Populated
+        run: |
+          set -euo pipefail
+          if [[ -z "$(find packages -name '*.nupkg' -print -quit)" ]]; then
+            printf '::error::no packages were collected\n'
+            exit 1
+          fi
+          find packages -name '*.nupkg' | sort
+
+      # The exchanged key lives one hour, so it is requested immediately before the push.
+      # nuget.org's policy names this file, so renaming it stops publishing until updated.
+      - name: NuGet Login (OIDC)
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         id: nuget-login
         with:
           user: ${{ secrets.NUGET_USER }}
 
+      # Not --api-key: the argument list is readable by any process on the runner. The
+      # symbol package inherits this key, so nuget.org's symbol service needs no second one.
       - name: Push to NuGet
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: >-
           dotnet nuget push "./packages/**/*.nupkg"
-          --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
 
       - name: Push to GitHub Packages
+        env:
+          NUGET_API_KEY: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           dotnet nuget push "./packages/**/*.nupkg"
-          --api-key ${{ secrets.GITHUB_TOKEN }}
-          --source https://nuget.pkg.github.com/arashi01/index.json
+          --source https://nuget.pkg.github.com/shuwariafrica/index.json
           --skip-duplicate
+
+      # Mint an org release-bot token so the GitHub Release is created under the Shuwari
+      # Africa app identity, not the ephemeral default GITHUB_TOKEN actor.
+      - name: Mint Release Bot Token
+        id: release-bot
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
 
       - name: Create GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: >-
-          gh release create "${{ github.ref_name }}"
-          packages/*.nupkg
-          --repo "${{ github.repository }}"
-          --title "${{ github.ref_name }}"
-          --generate-notes
-          ${{ contains(github.ref_name, '-') && '--prerelease' || '' }}
+          GH_TOKEN: ${{ steps.release-bot.outputs.token }}
+        run: |
+          set -euo pipefail
+          prerelease_flag=""
+          if [[ "${{ github.ref_name }}" == *-* ]]; then
+            prerelease_flag="--prerelease"
+          fi
+          gh release create "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            --verify-tag \
+            ${prerelease_flag}

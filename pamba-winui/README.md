@@ -27,8 +27,9 @@ MvuRuntime<AppState, Msg, Cmd, Sub> runtime = WinUIRuntime
 
 ## State projection
 
-`Projection<TState>` maps state changes to UI updates. Subclass it and
-register segments in the constructor. Each segment receives a selector that identifies
+`Projection<TState>` maps state changes to UI updates. It ships in `Pamba`, not this package,
+so a projection class can live in your core project. Subclass it and register segments in
+the constructor. Each segment receives a selector that identifies
 a slice of state, and an action that updates the UI for that slice. Only segments whose
 selected value has changed are called on each transition.
 
@@ -179,7 +180,7 @@ public sealed record AppState
 }
 ```
 
-Handle locale switching in `Update`. `Resolve` is total — returns the registry's default
+Handle locale switching in `Update`. `Resolve` is total - returns the registry's default
 locale when no match is found:
 
 ```csharp

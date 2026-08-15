@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
@@ -53,7 +53,6 @@ public sealed class MvuRuntime<TState, TMsg, TCmd, TSub> : IDisposable, IAsyncDi
     _onStateChanged = onStateChanged;
     _cts = new CancellationTokenSource();
 
-    // Wrap the starter so that exceptions are routed via OnRuntimeError rather than propagating
     _subscriptionManager = new SubscriptionManager<TSub, TMsg>(SafeStarter, SafeDispatchRuntimeError);
 
     // 0 = disabled (no allocation). Positive = ring buffer of that size.
@@ -68,7 +67,8 @@ public sealed class MvuRuntime<TState, TMsg, TCmd, TSub> : IDisposable, IAsyncDi
 
       bool hasCorrectiveMessage = false;
       TMsg correctiveMessage = default!;
-      switch (program.Validate(initialState))
+      ValidationResult<TState, TMsg> initialValidation = program.Validate(initialState);
+      switch (initialValidation)
       {
         case ValidationResult<TState, TMsg>.Valid v:
           initialState = v.State;
@@ -78,6 +78,8 @@ public sealed class MvuRuntime<TState, TMsg, TCmd, TSub> : IDisposable, IAsyncDi
           hasCorrectiveMessage = true;
           correctiveMessage = i.Error;
           break;
+        default:
+          throw new UnreachableException($"unhandled {initialValidation.GetType().Name}");
       }
 
       _state = initialState;
@@ -152,8 +154,8 @@ public sealed class MvuRuntime<TState, TMsg, TCmd, TSub> : IDisposable, IAsyncDi
 
     if (!_enqueue(() => ProcessMessage(message)))
     {
-      // Queue has shut down. Cannot safely mutate state - no thread context for ProcessMessage.
-      // Consumer's OnRuntimeError can observe/log but the resulting message is not dispatched.
+      // No thread context to run ProcessMessage on, so the handler's message is observed
+      // by OnRuntimeError but never dispatched.
       NotifyRuntimeError(new PambaError.DispatchRejected());
     }
   }
@@ -226,7 +228,8 @@ public sealed class MvuRuntime<TState, TMsg, TCmd, TSub> : IDisposable, IAsyncDi
 
     bool hasCorrective = false;
     TMsg corrective = default!;
-    switch (_program.Validate(newState))
+    ValidationResult<TState, TMsg> validation = _program.Validate(newState);
+    switch (validation)
     {
       case ValidationResult<TState, TMsg>.Valid v:
         newState = v.State;
@@ -237,12 +240,15 @@ public sealed class MvuRuntime<TState, TMsg, TCmd, TSub> : IDisposable, IAsyncDi
         hasCorrective = true;
         corrective = i.Error;
         break;
+      default:
+        throw new UnreachableException($"unhandled {validation.GetType().Name}");
     }
 
     _state = newState;
 
+    bool stateChanged = !oldState.Equals(newState);
     ImmutableArray<TSub> newSubs = ImmutableArray<TSub>.Empty;
-    if (!oldState.Equals(newState))
+    if (stateChanged)
     {
       newSubs = _program.Subscriptions(newState);
       _subscriptionManager.Diff(newSubs, Dispatch);
@@ -256,8 +262,10 @@ public sealed class MvuRuntime<TState, TMsg, TCmd, TSub> : IDisposable, IAsyncDi
         _messageHistory.Dequeue();
       }
 
+      ImmutableArray<TSub> recordedSubs = stateChanged ? newSubs : _program.Subscriptions(newState);
+
       _messageHistory.Enqueue(new TransitionSnapshot<TState, TMsg, TCmd, TSub>(
-          message, oldState, newState, cmds, newSubs));
+          message, oldState, newState, cmds, recordedSubs));
     }
 
     foreach (TCmd cmd in cmds)
@@ -289,7 +297,8 @@ public sealed class MvuRuntime<TState, TMsg, TCmd, TSub> : IDisposable, IAsyncDi
 
       bool hasCorrective = false;
       TMsg corrective = default!;
-      switch (_program.Validate(newState))
+      ValidationResult<TState, TMsg> validation = _program.Validate(newState);
+      switch (validation)
       {
         case ValidationResult<TState, TMsg>.Valid v:
           newState = v.State;
@@ -300,6 +309,8 @@ public sealed class MvuRuntime<TState, TMsg, TCmd, TSub> : IDisposable, IAsyncDi
           hasCorrective = true;
           corrective = i.Error;
           break;
+        default:
+          throw new UnreachableException($"unhandled {validation.GetType().Name}");
       }
 
       _state = newState;
@@ -323,7 +334,6 @@ public sealed class MvuRuntime<TState, TMsg, TCmd, TSub> : IDisposable, IAsyncDi
       }
     }
 
-    // Single subscription diff + projection after entire batch
     if (!batchStartState.Equals(_state))
     {
       ImmutableArray<TSub> finalSubs = _program.Subscriptions(_state);
@@ -411,7 +421,7 @@ public sealed class MvuRuntime<TState, TMsg, TCmd, TSub> : IDisposable, IAsyncDi
     }
     catch (Exception handlerEx)
     {
-      // OnRuntimeError threw — no typed channel remains. Trace for production visibility.
+      // OnRuntimeError threw - no typed channel remains. Trace for production visibility.
       Trace.TraceError(
           $"OnRuntimeError threw an exception. Original error: {error}\nHandler exception: {handlerEx}");
       return default;

@@ -81,8 +81,8 @@ Init() -> (State, Cmd[])
 
 | Package         | TFM               | Dependencies           | Purpose                                                                                        |
 | --------------- | ----------------- | ---------------------- | ---------------------------------------------------------------------------------------------- |
-| `Pamba`         | `net10.0`         | None                   | Contracts, dispatch loop, command/subscription infrastructure                                  |
-| `Pamba.WinUI`   | `net10.0-windows` | `Pamba`, WindowsAppSDK | `DispatcherQueue`-based runtime, `Projection`, timer/event subscriptions, command debouncer    |
+| `Pamba`         | `net10.0`         | None                   | Contracts, dispatch loop, command/subscription infrastructure, `Projection`                    |
+| `Pamba.WinUI`   | `net10.0-windows` | `Pamba`, WindowsAppSDK | `DispatcherQueue`-based runtime, timer/event subscriptions, command debouncer                  |
 | `Pamba.Testing` | `net10.0`         | `Pamba`                | `Scenario` for multi-step flow testing - works with xUnit, NUnit, MSTest                       |
 
 ## Quick Start
@@ -204,7 +204,7 @@ my-app/
   is silently absorbed.
 - **Projection safety.** If the `onStateChanged` projection callback throws, the exception
   is caught and routed via `OnRuntimeError` with `ProjectionFailed`. The state transition
-  itself completes — only the UI projection failed.
+  itself completes - only the UI projection failed.
 - **Error handler safety.** If `OnRuntimeError` itself throws, the error is traced via
   `Trace.TraceError` (observable in all builds via standard .NET trace listeners) and
   the runtime continues.

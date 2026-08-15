@@ -7,7 +7,9 @@
   -->
 
   <PropertyGroup>
-    <RumdlVersion>0.1.54</RumdlVersion>
+    <RumdlVersion>0.2.55</RumdlVersion>
+    <!-- Published beside the release archive as a .sha256; move it with RumdlVersion. -->
+    <RumdlSha256>47C04176F960E2D196B1E465564869363469EC00714C2970E1F441DEFF7F679D</RumdlSha256>
     <RepoRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..'))</RepoRoot>
     <RumdlToolDir>$(RepoRoot).tools\rumdl\</RumdlToolDir>
     <RumdlExe>$(RumdlToolDir)rumdl.exe</RumdlExe>
@@ -15,7 +17,6 @@
     <RumdlDownloadUrl>https://github.com/rvben/rumdl/releases/download/v$(RumdlVersion)/rumdl-v$(RumdlVersion)-x86_64-pc-windows-msvc.zip</RumdlDownloadUrl>
   </PropertyGroup>
 
-  <!-- Download rumdl binary if not present -->
   <Target Name="RestoreRumdl"
           BeforeTargets="LintMarkdown;FormatMarkdown"
           Condition="!Exists('$(RumdlExe)')">
@@ -24,6 +25,16 @@
     <DownloadFile SourceUrl="$(RumdlDownloadUrl)"
                   DestinationFolder="$(RumdlToolDir)"
                   DestinationFileName="rumdl-v$(RumdlVersion).zip" />
+
+    <GetFileHash Files="$(RumdlZip)" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="RumdlActualSha256" />
+    </GetFileHash>
+
+    <!-- Delete first: a rejected archive must not survive to be picked up by a later run. -->
+    <Delete Files="$(RumdlZip)" Condition="'$(RumdlActualSha256)' != '$(RumdlSha256)'" />
+    <Error Condition="'$(RumdlActualSha256)' != '$(RumdlSha256)'"
+           Text="rumdl v$(RumdlVersion) failed checksum verification. Expected $(RumdlSha256), got $(RumdlActualSha256). The download was discarded." />
+
     <Unzip SourceFiles="$(RumdlZip)"
            DestinationFolder="$(RumdlToolDir)"
            OverwriteReadOnlyFiles="true" />

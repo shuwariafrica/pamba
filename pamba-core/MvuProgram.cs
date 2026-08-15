@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
@@ -51,7 +51,7 @@ public sealed class MvuProgram<TState, TMsg, TCmd, TSub>
   /// State validator invoked after every transition.
   /// Returns <see cref="ValidationResult{TState, TMsg}.Valid"/> with the accepted (optionally normalised) state,
   /// or <see cref="ValidationResult{TState, TMsg}.Invalid"/> with a corrective message to dispatch.
-  /// A total function — never throws.
+  /// A total function - never throws.
   /// Assign <see cref="ValidationResultExtensions">ValidationResult&lt;TState, TMsg&gt;.AlwaysValid</see>
   /// when structural validation is not needed.
   /// </summary>

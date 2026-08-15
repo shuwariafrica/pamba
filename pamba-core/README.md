@@ -239,8 +239,8 @@ Transition<AppState, Msg, Cmd, Sub> t = program.Step(currentState, new Msg.Incre
 
 ## Related Packages
 
-- **Pamba.WinUI** - WinUI 3 integration with `DispatcherQueue`, `Projection`
-  for segment-based UI diffing, timer/event subscription helpers, and command debouncer.
+- **Pamba.WinUI** - WinUI 3 integration with `DispatcherQueue`, timer/event subscription
+  helpers, and command debouncer.
 - **Pamba.Testing** - `Scenario` for multi-step flow testing using `program.Step()` / `program.Initialize()`.
 
 ## Licence

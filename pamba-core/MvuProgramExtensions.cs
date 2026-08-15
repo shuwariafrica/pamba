@@ -1,8 +1,9 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
 using System.Collections.Immutable;
+using System.Diagnostics;
 
 namespace Pamba;
 
@@ -32,7 +33,8 @@ public static class MvuProgramExtensions
       (TState newState, ImmutableArray<TCmd> cmds) = program.Update(message, currentState);
       TMsg? correctionMessage = default;
 
-      switch (program.Validate(newState))
+      ValidationResult<TState, TMsg> validation = program.Validate(newState);
+      switch (validation)
       {
         case ValidationResult<TState, TMsg>.Valid v:
           newState = v.State;
@@ -42,6 +44,8 @@ public static class MvuProgramExtensions
           cmds = ImmutableArray<TCmd>.Empty;
           correctionMessage = i.Error;
           break;
+        default:
+          throw new UnreachableException($"unhandled {validation.GetType().Name}");
       }
 
       ImmutableArray<TSub> subs = program.Subscriptions(newState);
@@ -58,7 +62,8 @@ public static class MvuProgramExtensions
       (TState initialState, ImmutableArray<TCmd> cmds) = program.Init();
       TMsg? correctionMessage = default;
 
-      switch (program.Validate(initialState))
+      ValidationResult<TState, TMsg> validation = program.Validate(initialState);
+      switch (validation)
       {
         case ValidationResult<TState, TMsg>.Valid v:
           initialState = v.State;
@@ -67,6 +72,8 @@ public static class MvuProgramExtensions
           cmds = ImmutableArray<TCmd>.Empty;
           correctionMessage = i.Error;
           break;
+        default:
+          throw new UnreachableException($"unhandled {validation.GetType().Name}");
       }
 
       ImmutableArray<TSub> subs = program.Subscriptions(initialState);

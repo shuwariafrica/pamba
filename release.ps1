@@ -44,7 +44,7 @@ trap {
 
 # --- Configuration -----------------------------------------------------------
 
-$MainRepoOwner = if ($env:MAIN_REPO_OWNER) { $env:MAIN_REPO_OWNER } else { 'arashi01' }
+$MainRepoOwner = if ($env:MAIN_REPO_OWNER) { $env:MAIN_REPO_OWNER } else { 'shuwariafrica' }
 $MainRepoName = if ($env:MAIN_REPO_NAME) { $env:MAIN_REPO_NAME }  else { 'pamba' }
 $MainRepoSlug = "$MainRepoOwner/$MainRepoName"
 
@@ -160,7 +160,7 @@ if ($currentBranch -eq 'HEAD') {
   throw 'Detached HEAD state. Check out a branch with an upstream tracking branch.'
 }
 
-# Query both remote and merge ref directly — a branch can have remote set
+# Query both remote and merge ref directly - a branch can have remote set
 # without merge (rare), which would cause @{u} to fail later with a generic
 # error rather than our descriptive one.
 $upstreamRemote = ("$(git config "branch.$currentBranch.remote" 2>$null)").Trim()

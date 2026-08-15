@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
@@ -733,6 +733,249 @@ public sealed class MvuRuntimeTests
     runtime.DispatchAll(); // empty params is empty span
 
     Assert.Equal(0, runtime.State.Count);
+  }
+
+  [Fact]
+  public void Subscription_onError_routes_SubscriptionFaulted_carrying_key_and_cause()
+  {
+    List<PambaError> runtimeErrors = [];
+    Action<Exception>? capturedOnError = null;
+
+    MvuProgram<TestState, TestMsg, TestCmd, TestSub> program = new()
+    {
+      Init = () => (new TestState(0, true), []),
+      Update = (_, state) => (state, []),
+      Subscriptions = state => state.SubActive
+          ? [new TestSub(SubscriptionKey.From("ticker"))]
+          : [],
+      OnRuntimeError = err =>
+      {
+        runtimeErrors.Add(err);
+        return new TestMsg.RuntimeErrored(err.ToString());
+      },
+      Validate = ValidationResult<TestState, TestMsg>.AlwaysValid
+    };
+
+    IAsyncDisposable CapturingStarter(TestSub sub, Dispatch<TestMsg> dispatch, Action<Exception> onError)
+    {
+      capturedOnError = onError;
+      return new TrackingAsyncDisposable();
+    }
+
+    using MvuRuntime<TestState, TestMsg, TestCmd, TestSub> runtime =
+        StartRuntime(program, NoOpExecutor, CapturingStarter);
+
+    Assert.NotNull(capturedOnError);
+    InvalidOperationException tickFailure = new("tick handler threw");
+    capturedOnError(tickFailure);
+
+    PambaError.SubscriptionFaulted faulted =
+        Assert.IsType<PambaError.SubscriptionFaulted>(Assert.Single(runtimeErrors));
+    Assert.Equal("ticker", faulted.Key.Value);
+    Assert.Same(tickFailure, faulted.Cause);
+  }
+
+  [Fact]
+  public void Duplicate_subscription_keys_route_DuplicateSubscriptionKey_and_start_only_the_first()
+  {
+    List<PambaError> runtimeErrors = [];
+    List<int> startedIntervals = [];
+
+    MvuProgram<TestState, TestMsg, TestCmd, TestSubWithData> program = new()
+    {
+      Init = () => (new TestState(0, true), []),
+      Update = (_, state) => (state, []),
+      Subscriptions = _ =>
+      [
+        new TestSubWithData(SubscriptionKey.From("ticker"), 1),
+        new TestSubWithData(SubscriptionKey.From("ticker"), 2)
+      ],
+      OnRuntimeError = err =>
+      {
+        runtimeErrors.Add(err);
+        return new TestMsg.RuntimeErrored(err.ToString());
+      },
+      Validate = ValidationResult<TestState, TestMsg>.AlwaysValid
+    };
+
+    using var runtime = MvuRuntimeBuilder
+        .Create(program)
+        .WithCommandExecutor(
+            (TestCmd cmd, Dispatch<TestMsg> dispatch, CancellationToken ct) =>
+                ValueTask.FromResult(CommandResult<TestMsg>.Ok))
+        .WithSubscriptionStarter(
+            (TestSubWithData sub, Dispatch<TestMsg> dispatch, Action<Exception> onError) =>
+            {
+              startedIntervals.Add(sub.Interval);
+              return new TrackingAsyncDisposable();
+            })
+        .WithDispatcher(action => { action(); return true; })
+        .Start();
+
+    PambaError.DuplicateSubscriptionKey duplicate =
+        Assert.IsType<PambaError.DuplicateSubscriptionKey>(Assert.Single(runtimeErrors));
+    Assert.Equal("ticker", duplicate.Key.Value);
+
+    Assert.Equal([1], startedIntervals);
+  }
+
+  [Fact]
+  public void Starter_exception_routes_SubscriptionStartFailed_carrying_key_and_cause()
+  {
+    List<PambaError> runtimeErrors = [];
+
+    MvuProgram<TestState, TestMsg, TestCmd, TestSub> program = new()
+    {
+      Init = () => (new TestState(0, true), []),
+      Update = (_, state) => (state with { SubActive = false }, []),
+      Subscriptions = state => state.SubActive
+          ? [new TestSub(SubscriptionKey.From("ticker"))]
+          : [],
+      OnRuntimeError = err =>
+      {
+        runtimeErrors.Add(err);
+        return new TestMsg.RuntimeErrored(err.ToString());
+      },
+      Validate = ValidationResult<TestState, TestMsg>.AlwaysValid
+    };
+
+    InvalidOperationException startFailure = new("Timer init failed");
+    IAsyncDisposable ThrowingStarter(TestSub sub, Dispatch<TestMsg> dispatch, Action<Exception> onError) =>
+        throw startFailure;
+
+    using MvuRuntime<TestState, TestMsg, TestCmd, TestSub> runtime =
+        StartRuntime(program, NoOpExecutor, ThrowingStarter);
+
+    PambaError.SubscriptionStartFailed failed =
+        Assert.IsType<PambaError.SubscriptionStartFailed>(Assert.Single(runtimeErrors));
+    Assert.Equal("ticker", failed.Key.Value);
+    Assert.Same(startFailure, failed.Cause);
+  }
+
+  [Fact]
+  public void Dispatch_after_queue_shutdown_routes_DispatchRejected()
+  {
+    List<PambaError> runtimeErrors = [];
+
+    MvuProgram<TestState, TestMsg, TestCmd, TestSub> program = new()
+    {
+      Init = () => (new TestState(0, false), []),
+      Update = (_, state) => (state, []),
+      Subscriptions = _ => [],
+      OnRuntimeError = err =>
+      {
+        runtimeErrors.Add(err);
+        return new TestMsg.RuntimeErrored(err.ToString());
+      },
+      Validate = ValidationResult<TestState, TestMsg>.AlwaysValid
+    };
+
+    bool queueOpen = true;
+    Func<Action, bool> shuttingDownDispatcher = action =>
+    {
+      if (!queueOpen)
+      {
+        return false;
+      }
+
+      action();
+      return true;
+    };
+
+    using var runtime = MvuRuntimeBuilder
+        .Create(program)
+        .WithCommandExecutor(NoOpExecutor)
+        .WithSubscriptionStarter(NoOpStarter)
+        .WithDispatcher(shuttingDownDispatcher)
+        .Start();
+
+    queueOpen = false;
+    runtime.Dispatch(new TestMsg.Increment());
+
+    Assert.IsType<PambaError.DispatchRejected>(Assert.Single(runtimeErrors));
+  }
+
+  [Fact]
+  public void MessageHistory_is_empty_when_history_is_not_enabled()
+  {
+    using MvuRuntime<TestState, TestMsg, TestCmd, TestSub> runtime =
+        StartRuntime(CreateProgram(), NoOpExecutor, NoOpStarter);
+
+    runtime.Dispatch(new TestMsg.Increment());
+
+    Assert.Equal(1, runtime.State.Count);
+    Assert.Empty(runtime.MessageHistory);
+  }
+
+  [Fact]
+  public void MessageHistory_records_the_states_message_and_commands_of_each_transition()
+  {
+    using var runtime = MvuRuntimeBuilder
+        .Create(CreateProgram())
+        .WithCommandExecutor(NoOpExecutor)
+        .WithSubscriptionStarter(NoOpStarter)
+        .WithDispatcher(action => { action(); return true; })
+        .WithMaxHistorySize(8)
+        .Start();
+
+    runtime.Dispatch(new TestMsg.Increment());
+
+    TransitionSnapshot<TestState, TestMsg, TestCmd, TestSub> snapshot =
+        Assert.Single(runtime.MessageHistory);
+    Assert.IsType<TestMsg.Increment>(snapshot.Message);
+    Assert.Equal(0, snapshot.StateBefore.Count);
+    Assert.Equal(1, snapshot.StateAfter.Count);
+    Assert.Equal(new TestCmd.Save(1), Assert.Single(snapshot.Commands));
+  }
+
+  [Fact]
+  public void MessageHistory_evicts_the_oldest_transition_beyond_its_configured_size()
+  {
+    using var runtime = MvuRuntimeBuilder
+        .Create(CreateProgram())
+        .WithCommandExecutor(NoOpExecutor)
+        .WithSubscriptionStarter(NoOpStarter)
+        .WithDispatcher(action => { action(); return true; })
+        .WithMaxHistorySize(2)
+        .Start();
+
+    runtime.Dispatch(new TestMsg.SetValue(1));
+    runtime.Dispatch(new TestMsg.SetValue(2));
+    runtime.Dispatch(new TestMsg.SetValue(3));
+
+    List<TransitionSnapshot<TestState, TestMsg, TestCmd, TestSub>> history = [.. runtime.MessageHistory];
+    Assert.Equal(2, history.Count);
+    Assert.Equal([2, 3], history.ConvertAll(h => h.StateAfter.Count));
+  }
+
+  [Fact]
+  public void MessageHistory_records_active_subscriptions_when_the_state_did_not_change()
+  {
+    MvuProgram<TestState, TestMsg, TestCmd, TestSub> program = new()
+    {
+      Init = () => (new TestState(0, true), []),
+      Update = (_, state) => (state, []),
+      Subscriptions = state => state.SubActive
+          ? [new TestSub(SubscriptionKey.From("ticker"))]
+          : [],
+      OnRuntimeError = err => new TestMsg.RuntimeErrored(err.ToString()),
+      Validate = ValidationResult<TestState, TestMsg>.AlwaysValid
+    };
+
+    using var runtime = MvuRuntimeBuilder
+        .Create(program)
+        .WithCommandExecutor(NoOpExecutor)
+        .WithSubscriptionStarter(NoOpStarter)
+        .WithDispatcher(action => { action(); return true; })
+        .WithMaxHistorySize(4)
+        .Start();
+
+    runtime.Dispatch(new TestMsg.Increment());
+
+    TransitionSnapshot<TestState, TestMsg, TestCmd, TestSub> snapshot =
+        Assert.Single(runtime.MessageHistory);
+    Assert.Equal(snapshot.StateBefore, snapshot.StateAfter);
+    Assert.Equal("ticker", Assert.Single(snapshot.Subscriptions).Key.Value);
   }
 
   private sealed record TestSubWithData(SubscriptionKey Key, int Interval) : ISubscription<TestMsg>;
