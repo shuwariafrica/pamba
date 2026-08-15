@@ -138,8 +138,9 @@ jobs:
           dotnet test pamba-ci.slnf
           --no-build
           --configuration ${{ env.CONFIGURATION }}
-          --logger "trx;LogFileName=results.trx"
-          --collect "XPlat Code Coverage"
+          --report-trx
+          --coverlet
+          --coverlet-output-format cobertura
           --results-directory ./test-results
 
       - name: Pack
@@ -172,7 +173,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-${{ matrix.arch }}
-          path: ./test-results/**/coverage.cobertura.xml
+          path: ./test-results/**/coverage.cobertura*.xml
           retention-days: 7
 
   release:
