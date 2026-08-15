@@ -4,6 +4,8 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- xUnit v3 test projects are stand-alone executables hosting their own runner. -->
+    <OutputType>Exe</OutputType>
   </PropertyGroup>
 
   <!-- Suppress test-specific analyser rules -->
@@ -12,20 +14,14 @@
     <!-- CA1515: Public types in test assemblies - xUnit requires public test classes -->
     <!-- CA1812: Never-instantiated internal classes - test runner instantiates test classes externally -->
     <!-- CA2007: ConfigureAwait - tests run under a SynchronizationContext; await using cannot use ConfigureAwait -->
-    <NoWarn>$(NoWarn);CA1707;CA1515;CA1812;CA2007</NoWarn>
+    <!-- CA1852: the generated entry point type cannot be sealed -->
+    <NoWarn>$(NoWarn);CA1707;CA1515;CA1812;CA2007;CA1852</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit" />
-    <PackageReference Include="xunit.runner.visualstudio">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="coverlet.collector">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+    <PackageReference Include="coverlet.mtp" />
   </ItemGroup>
 
 </Project>
