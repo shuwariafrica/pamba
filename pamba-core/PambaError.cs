@@ -1,5 +1,7 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
+
+using System;
 
 namespace Pamba;
 
@@ -7,8 +9,8 @@ namespace Pamba;
 /// Sealed hierarchy of library-originated errors.
 /// All errors produced by the runtime are subtypes of <see cref="PambaError"/>.
 /// Routed into the MVU loop via <see cref="MvuProgram{TState,TMsg,TCmd,TSub}.OnRuntimeError"/>.
-/// All variants carry immutable diagnostic strings captured at the catch site — not live
-/// <c>Exception</c> objects — preserving record value equality and serializability.
+/// Variants carrying an <see cref="Exception"/> use reference equality for that field -
+/// two different exception instances represent two different faults.
 /// </summary>
 public abstract record PambaError
 {
@@ -25,22 +27,20 @@ public abstract record PambaError
   /// A subscription starter threw an exception when starting the subscription identified by <see cref="Key"/>.
   /// </summary>
   /// <param name="Key">The subscription key whose starter threw.</param>
-  /// <param name="ExceptionType">The exception type name, captured at the catch site.</param>
-  /// <param name="ExceptionMessage">The exception message, captured at the catch site.</param>
+  /// <param name="Cause">The exception thrown by the starter.</param>
   public sealed record SubscriptionStartFailed(
       SubscriptionKey Key,
-      string ExceptionType,
-      string ExceptionMessage) : PambaError;
+      Exception Cause) : PambaError;
 
   /// <summary>
-  /// The state projection callback threw an exception during a state transition.
-  /// The state transition itself completed successfully; only the UI projection failed.
+  /// An active subscription threw an exception during its ongoing operation (tick handler,
+  /// event handler). The subscription remains active; the exception is routed for handling.
   /// </summary>
-  /// <param name="ExceptionType">The exception type name, captured at the catch site.</param>
-  /// <param name="ExceptionMessage">The exception message, captured at the catch site.</param>
-  public sealed record ProjectionFailed(
-      string ExceptionType,
-      string ExceptionMessage) : PambaError;
+  /// <param name="Key">The subscription key whose handler threw.</param>
+  /// <param name="Cause">The exception thrown during the subscription's operation.</param>
+  public sealed record SubscriptionFaulted(
+      SubscriptionKey Key,
+      Exception Cause) : PambaError;
 
   /// <summary>
   /// The <see cref="MvuProgram{TState,TMsg,TCmd,TSub}.Subscriptions"/> function returned
@@ -51,16 +51,21 @@ public abstract record PambaError
   public sealed record DuplicateSubscriptionKey(SubscriptionKey Key) : PambaError;
 
   /// <summary>
+  /// The state projection callback threw an exception during a state transition.
+  /// The state transition itself completed successfully; only the UI projection failed.
+  /// </summary>
+  /// <param name="Cause">The exception thrown by the projection callback.</param>
+  public sealed record ProjectionFailed(Exception Cause) : PambaError;
+
+  /// <summary>
   /// A command executor threw an unexpected exception (programming bug in the executor).
   /// Well-implemented executors signal expected failures via <see cref="CommandResultExtensions"/>
   /// rather than throwing. This variant covers only unhandled throws.
   /// </summary>
   /// <param name="CommandType">The command type name.</param>
-  /// <param name="ExceptionType">The exception type name, captured at the catch site.</param>
-  /// <param name="ExceptionMessage">The exception message, captured at the catch site.</param>
+  /// <param name="Cause">The exception thrown by the executor.</param>
   public sealed record CommandExecutorFailed(
       string CommandType,
-      string ExceptionType,
-      string ExceptionMessage) : PambaError;
+      Exception Cause) : PambaError;
 #pragma warning restore CA1034
 }

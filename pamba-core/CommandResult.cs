@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 namespace Pamba;
@@ -33,7 +33,7 @@ public static class CommandResultExtensions
   extension<TMsg>(CommandResult<TMsg>)
   {
     /// <summary>
-    /// A successful command result. Zero allocation — the default struct value.
+    /// A successful command result. Zero allocation - the default struct value.
     /// </summary>
     public static CommandResult<TMsg> Ok => default;
 

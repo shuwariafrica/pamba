@@ -81,9 +81,9 @@ Init() -> (State, Cmd[])
 
 | Package         | TFM               | Dependencies           | Purpose                                                                                        |
 | --------------- | ----------------- | ---------------------- | ---------------------------------------------------------------------------------------------- |
-| `Pamba`         | `net10.0`         | None                   | Contracts, dispatch loop, command/subscription infrastructure                                  |
-| `Pamba.WinUI`   | `net10.0-windows` | `Pamba`, WindowsAppSDK | `DispatcherQueue`-based runtime, projection base, timer/event subscriptions, command debouncer |
-| `Pamba.Testing` | `net10.0`         | `Pamba`                | `MvuTestRunner`, `MvuScenario` - works with xUnit, NUnit, MSTest                               |
+| `Pamba`         | `net10.0`         | None                   | Contracts, dispatch loop, command/subscription infrastructure, `Projection`                    |
+| `Pamba.WinUI`   | `net10.0-windows` | `Pamba`, WindowsAppSDK | `DispatcherQueue`-based runtime, timer/event subscriptions, command debouncer                  |
+| `Pamba.Testing` | `net10.0`         | `Pamba`                | `Scenario` for multi-step flow testing - works with xUnit, NUnit, MSTest                       |
 
 ## Quick Start
 
@@ -135,7 +135,7 @@ public static readonly MvuProgram<AppState, Msg, Cmd, Sub> Program = new()
 ```csharp
 var projection = new AppProjection(mainWindow);
 
-_runtime = WinUIMvuRuntime
+_runtime = WinUIRuntime
     .Create(Program, mainWindow.DispatcherQueue)
     .WithCommandExecutor(commandExecutor.Execute)
     .WithSubscriptionStarter(subscriptionStarter.Start)
@@ -149,8 +149,8 @@ _runtime = WinUIMvuRuntime
 [Fact]
 public void Increment_increases_count_and_persists()
 {
-  TransitionResult<AppState, Msg, Cmd, Sub> result =
-      MvuTestRunner.UpdateAndValidate(Program, new AppState(0), new Msg.Increment());
+  Transition<AppState, Msg, Cmd, Sub> result =
+      Program.Step(new AppState(0), new Msg.Increment());
 
   Assert.Equal(1, result.State.Count);
   Assert.Single(result.Commands);
@@ -160,7 +160,7 @@ public void Increment_increases_count_and_persists()
 [Fact]
 public void Scenario_increments_accumulate()
 {
-  MvuScenario.For(Program)
+  Scenario.For(Program)
       .Dispatch(new Msg.Increment(), r => Assert.Equal(1, r.State.Count))
       .Dispatch(new Msg.Increment(), r => Assert.Equal(2, r.State.Count))
       .Dispatch(new Msg.Decrement())
@@ -182,11 +182,11 @@ my-app/
 
   my-app/                    (net10.0-windows, references Pamba.WinUI + my-app-core)
     Shell/
-      AppProjection.cs       Extends StateProjectionBase<AppState>
+      AppProjection.cs       Extends Projection<AppState>
       AppCommandExecutor.cs  Implements CommandExecutor<Cmd, Msg>
       AppSubscriptionStarter.cs
     MainWindow.xaml/.cs
-    App.xaml/.cs             Wires WinUIMvuRuntime
+    App.xaml/.cs             Wires WinUIRuntime
 
   my-app-core-tests/         (net10.0, references Pamba.Testing + my-app-core)
     UpdateTests.cs           Pure function tests
@@ -204,7 +204,7 @@ my-app/
   is silently absorbed.
 - **Projection safety.** If the `onStateChanged` projection callback throws, the exception
   is caught and routed via `OnRuntimeError` with `ProjectionFailed`. The state transition
-  itself completes — only the UI projection failed.
+  itself completes - only the UI projection failed.
 - **Error handler safety.** If `OnRuntimeError` itself throws, the error is traced via
   `Trace.TraceError` (observable in all builds via standard .NET trace listeners) and
   the runtime continues.
@@ -217,6 +217,9 @@ my-app/
   and projection callbacks are skipped. Commands are still executed.
 - **Thread safety.** `Dispatch` is safe to call from any thread.
   Processing occurs on the dispatcher thread.
+- **Diagnostic transparency.** Opt-in transition history via `WithMaxHistorySize`.
+  Records every transition in a bounded ring buffer. Disabled by default (zero overhead).
+  `MessageHistory` is never null.
 - **Disposal.** `MvuRuntime` implements `IDisposable` and `IAsyncDisposable`. Disposing
   cancels all active subscriptions and causes subsequent `Dispatch` calls to no-op.
 

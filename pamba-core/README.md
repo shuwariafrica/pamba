@@ -29,7 +29,7 @@ MvuProgram<TState, TMsg, TCmd, TSub>
 | `Init`           | `() -> (TState, ImmutableArray<TCmd>)`             | Initial state and startup commands                                                                                                  |
 | `Update`         | `(TMsg, TState) -> (TState, ImmutableArray<TCmd>)` | State transition - no side effects, returns new state and commands                                                                  |
 | `Subscriptions`  | `(TState) -> ImmutableArray<TSub>`                 | Declares which ongoing effects should be active for the current state                                                               |
-| `OnRuntimeError` | `(PambaError) -> TMsg`                             | Routes library errors (dispatch rejected, sub start failed, error handler failed, projection failed, executor failed) into the loop |
+| `OnRuntimeError` | `(PambaError) -> TMsg`                             | Routes library errors (dispatch rejected, sub start failed, duplicate key, projection failed, executor failed) into the loop        |
 | `Validate`       | `(TState) -> ValidationResult<TState, TMsg>`       | Invariant check after every transition - returns `Valid` or `Invalid` with corrective message. Assign `AlwaysValid` when not needed |
 
 ### Type Parameters
@@ -69,8 +69,9 @@ public delegate ValueTask<CommandResult<TMsg>> CommandExecutor<in TCmd, TMsg>(
     TCmd command, Dispatch<TMsg> dispatch, CancellationToken cancellationToken);
 
 // Start a subscription. Returns IAsyncDisposable - the runtime calls DisposeAsync to cancel.
+// onError routes ongoing exceptions (tick handlers, event handlers) as PambaError.SubscriptionFaulted.
 public delegate IAsyncDisposable SubscriptionStarter<in TSub, TMsg>(
-    TSub subscription, Dispatch<TMsg> dispatch)
+    TSub subscription, Dispatch<TMsg> dispatch, Action<Exception> onError)
     where TSub : ISubscription<TMsg>;
 
 // Strongly-typed subscription key.
@@ -202,11 +203,45 @@ using MvuRuntime<AppState, Msg, Cmd, Sub> runtime = MvuRuntimeBuilder
     .Start();
 ```
 
+## Transition History
+
+Opt-in diagnostic history via `WithMaxHistorySize`. Records every transition as a
+`TransitionSnapshot` in a bounded ring buffer. Disabled by default (zero overhead).
+
+```csharp
+var runtime = MvuRuntimeBuilder
+    .Create(program)
+    .WithCommandExecutor(executor)
+    .WithSubscriptionStarter(starter)
+    .WithDispatcher(enqueue)
+    .WithMaxHistorySize(100) // enable: retain last 100 transitions
+    .Start();
+
+// runtime.MessageHistory is never null; empty when disabled
+foreach (var snapshot in runtime.MessageHistory)
+{
+    // snapshot.Message, snapshot.StateBefore, snapshot.StateAfter, snapshot.Commands, snapshot.Subscriptions
+}
+```
+
+## Transition Pipeline
+
+`program.Step(state, msg)` and `program.Initialize()` execute the canonical
+Update + Validate + Subscriptions sequence as a single operation, returning a
+`Transition<TState, TMsg, TCmd, TSub>`. Use for composition (host delegating
+to guest programs) and testing:
+
+```csharp
+Transition<AppState, Msg, Cmd, Sub> t = program.Step(currentState, new Msg.Increment());
+// t.State, t.Commands, t.Subscriptions, t.CorrectionMessage
+// t.WasAccepted, t.WasRejected, t.HasCommands, t.HasSubscriptions
+```
+
 ## Related Packages
 
-- **Pamba.WinUI** - WinUI 3 integration with `DispatcherQueue`, `StateProjectionBase`
-  for segment-based UI diffing, timer/event subscription helpers, and command debouncer.
-- **Pamba.Testing** - `MvuTestRunner.UpdateAndValidate` and `MvuScenario` for multi-step flow testing.
+- **Pamba.WinUI** - WinUI 3 integration with `DispatcherQueue`, timer/event subscription
+  helpers, and command debouncer.
+- **Pamba.Testing** - `Scenario` for multi-step flow testing using `program.Step()` / `program.Initialize()`.
 
 ## Licence
 

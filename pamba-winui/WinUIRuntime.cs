@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
@@ -10,7 +10,7 @@ namespace Pamba.WinUI;
 /// Creates an <see cref="MvuRuntime{TState, TMsg, TCmd, TSub}"/> wired to
 /// WinUI's <see cref="DispatcherQueue"/> for FIFO message ordering on the UI thread.
 /// </summary>
-public static class WinUIMvuRuntime
+public static class WinUIRuntime
 {
   /// <summary>
   /// Begin constructing a WinUI-backed MVU runtime.
@@ -93,7 +93,7 @@ public static class WinUIMvuRuntime
     }
 
     public IWinUIReady<TState, TMsg, TCmd, TSub>
-        WithProjection(StateProjectionBase<TState> projection)
+        WithProjection(Projection<TState> projection)
     {
       ArgumentNullException.ThrowIfNull(projection);
       _onInit = projection.ProjectInitial;
@@ -108,8 +108,7 @@ public static class WinUIMvuRuntime
       return this;
     }
 
-    // Explicit interface implementation: IWinUIConfigurable also exposes WithMaxHistorySize
-    // for the no-projection Start() path.
+    // IWinUIConfigurable exposes WithMaxHistorySize too, for the no-projection Start() path.
     IWinUIConfigurable<TState, TMsg, TCmd, TSub>
         IWinUIConfigurable<TState, TMsg, TCmd, TSub>.WithMaxHistorySize(int maxSize)
     {
@@ -120,8 +119,7 @@ public static class WinUIMvuRuntime
 
     public MvuRuntime<TState, TMsg, TCmd, TSub> Start()
     {
-      // TryEnqueue returns bool: true if the action was enqueued, false if the queue has shut down.
-      // The bool is propagated to MvuRuntime which routes false as PambaError.DispatchRejected.
+      // A false from TryEnqueue reaches MvuRuntime as PambaError.DispatchRejected.
       Func<Action, bool> enqueue = action => _dispatcherQueue.TryEnqueue(() => action());
 
       IRuntimeNeedsDispatcher<TState, TMsg, TCmd, TSub> withSubs = MvuRuntimeBuilder
@@ -195,11 +193,11 @@ public interface IWinUIConfigurable<TState, TMsg, TCmd, TSub>
           Action<TState> onInit,
           Action<TState, TState> onStateChanged);
 
-  /// <summary>Provide a <see cref="StateProjectionBase{TState}"/> for segment-based projection.</summary>
+  /// <summary>Provide a <see cref="Projection{TState}"/> for segment-based projection.</summary>
   public IWinUIReady<TState, TMsg, TCmd, TSub>
-      WithProjection(StateProjectionBase<TState> projection);
+      WithProjection(Projection<TState> projection);
 
-  /// <summary>Set the maximum debug history size. Default is 1000. Only has effect in debug builds.</summary>
+  /// <summary>Enable transition history with the specified ring buffer size. Disabled by default.</summary>
   public IWinUIConfigurable<TState, TMsg, TCmd, TSub> WithMaxHistorySize(int maxSize);
 
   /// <summary>Start without projection.</summary>
@@ -213,7 +211,7 @@ public interface IWinUIReady<TState, TMsg, TCmd, TSub>
     where TCmd : notnull
     where TSub : IEquatable<TSub>, ISubscription<TMsg>
 {
-  /// <summary>Set the maximum debug history size. Default is 1000. Only has effect in debug builds.</summary>
+  /// <summary>Enable transition history with the specified ring buffer size. Disabled by default.</summary>
   public IWinUIReady<TState, TMsg, TCmd, TSub> WithMaxHistorySize(int maxSize);
 
   /// <summary>

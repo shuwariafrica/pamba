@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
@@ -15,7 +15,7 @@ namespace Pamba;
 /// <see cref="ProjectInitial"/> on the appropriate thread.
 /// </summary>
 /// <typeparam name="TState">Immutable application state.</typeparam>
-public abstract class StateProjectionBase<TState>
+public abstract class Projection<TState>
     where TState : IEquatable<TState>
 {
   private readonly ImmutableArray<Action<TState, TState>>.Builder _diffBuilder;
@@ -28,7 +28,7 @@ public abstract class StateProjectionBase<TState>
   /// Initialises the projection base. Subclasses register segments via
   /// <see cref="Segment{TSegment}(Func{TState, TSegment}, Action{TSegment})"/> in their constructor.
   /// </summary>
-  protected StateProjectionBase()
+  protected Projection()
   {
     _diffBuilder = ImmutableArray.CreateBuilder<Action<TState, TState>>();
     _initBuilder = ImmutableArray.CreateBuilder<Action<TState>>();

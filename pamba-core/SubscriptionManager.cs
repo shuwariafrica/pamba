@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
@@ -16,13 +16,13 @@ namespace Pamba;
 internal sealed class SubscriptionManager<TSub, TMsg> : IAsyncDisposable
     where TSub : IEquatable<TSub>, ISubscription<TMsg>
 {
-  private readonly SubscriptionStarter<TSub, TMsg> _starter;
+  private readonly Func<TSub, Dispatch<TMsg>, IAsyncDisposable> _starter;
   private readonly Action<PambaError> _onError;
   private readonly Dictionary<SubscriptionKey, (TSub Subscription, IAsyncDisposable Handle)> _active;
   private readonly HashSet<SubscriptionKey> _currentKeys;
   private readonly List<SubscriptionKey> _removalBuffer;
 
-  internal SubscriptionManager(SubscriptionStarter<TSub, TMsg> starter, Action<PambaError> onError)
+  internal SubscriptionManager(Func<TSub, Dispatch<TMsg>, IAsyncDisposable> starter, Action<PambaError> onError)
   {
     _starter = starter;
     _onError = onError;
@@ -99,9 +99,8 @@ internal sealed class SubscriptionManager<TSub, TMsg> : IAsyncDisposable
     _active.Clear();
   }
 
-  // Fire-and-forget: used during Diff where awaiting is not possible (sync context).
-  // Subscriptions with sync-only cleanup complete immediately. Subscriptions with
-  // async cleanup (network connections etc.) run their cleanup in the background.
+  // Diff runs on the dispatcher thread and cannot await, so async cleanup finishes in the
+  // background and a slow teardown never blocks the loop.
 #pragma warning disable CA1031 // Subscription dispose must not block cleanup of remaining subscriptions
 #pragma warning disable CA2012 // fire-and-forget: ValueTask used intentionally for background async cleanup
   private static void DisposeHandleFireAndForget(IAsyncDisposable handle) =>

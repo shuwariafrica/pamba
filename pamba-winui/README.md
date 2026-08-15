@@ -10,14 +10,14 @@ Requires .NET 10 / C# 14, `Pamba`, and `Microsoft.WindowsAppSDK`. Minimum platfo
 
 ## Starting the runtime
 
-`WinUIMvuRuntime` builds and starts the MVU loop. The builder enforces the correct
+`WinUIRuntime` builds and starts the MVU loop. The builder enforces the correct
 construction order at compile time. Projection is optional - call `.Start()` directly
 after `.WithSubscriptionStarter()` if you have no UI projection.
 
 ```csharp
 var projection = new AppProjection(mainWindow);
 
-MvuRuntime<AppState, Msg, Cmd, Sub> runtime = WinUIMvuRuntime
+MvuRuntime<AppState, Msg, Cmd, Sub> runtime = WinUIRuntime
     .Create(program, mainWindow.DispatcherQueue)
     .WithCommandExecutor(commandExecutor.Execute)
     .WithSubscriptionStarter(subscriptionStarter.Start)
@@ -27,13 +27,14 @@ MvuRuntime<AppState, Msg, Cmd, Sub> runtime = WinUIMvuRuntime
 
 ## State projection
 
-`StateProjectionBase<TState>` maps state changes to UI updates. Subclass it and
-register segments in the constructor. Each segment receives a selector that identifies
+`Projection<TState>` maps state changes to UI updates. It ships in `Pamba`, not this package,
+so a projection class can live in your core project. Subclass it and register segments in
+the constructor. Each segment receives a selector that identifies
 a slice of state, and an action that updates the UI for that slice. Only segments whose
 selected value has changed are called on each transition.
 
 ```csharp
-public sealed class AppProjection : StateProjectionBase<AppState>
+public sealed class AppProjection : Projection<AppState>
 {
     public AppProjection(MainWindow window)
     {
@@ -66,22 +67,25 @@ that alters the selected value, receiving both old and new values.
 ## Timer Subscriptions
 
 Pre-built helpers for timer-based subscriptions. Use them inside your
-`SubscriptionStarter` delegate to handle specific subscription types:
+`SubscriptionStarter` delegate. Pass through the `onError` callback from the runtime
+so tick/event handler exceptions route as `PambaError.SubscriptionFaulted`:
 
 ```csharp
-IAsyncDisposable StartSubscription(Sub subscription, Dispatch<Msg> dispatch) =>
+IAsyncDisposable StartSubscription(Sub subscription, Dispatch<Msg> dispatch, Action<Exception> onError) =>
     subscription switch
     {
       Sub.RefreshTimer t => TimerSubscription.Start(
           interval: t.Interval,
           createMessage: () => new Msg.RefreshTick(),
           dispatch: dispatch,
+          onError: onError,
           dispatcherQueue: _dispatcherQueue),
 
       Sub.SearchDebounce d => DelayedSubscription.Start(
           delay: d.Delay,
           createMessage: () => new Msg.DebounceComplete(),
           dispatch: dispatch,
+          onError: onError,
           dispatcherQueue: _dispatcherQueue),
 
       _ => throw new InvalidOperationException($"Unknown subscription: {subscription}")
@@ -102,6 +106,7 @@ Sub.LocaleChanged s => PropertyChangedSubscription.Start(
     propertyName: "Current",
     createMessage: () => new Msg.LocaleChanged(localeHost.Current.Culture.Name),
     dispatch: dispatch,
+    onError: onError,
     dispatcherQueue: _dispatcherQueue),
 ```
 
@@ -124,13 +129,38 @@ var debounced = new CommandDebouncer<Cmd, Msg>(
 // debounced.Execute is a CommandExecutor<Cmd, Msg>
 ```
 
-Call `FlushAsync` during graceful shutdown to execute any pending debounced command
-before disposing. Without this, the last debounced command is lost on disposal.
-`CommandDebouncer` implements both `IDisposable` and `IAsyncDisposable`:
+### Shutdown
+
+`FlushAsync` executes pending work, then prevents further scheduling.
+`DiscardPending` cancels pending work without executing it; the debouncer remains
+usable (e.g. session expiry where the pending state should not be persisted).
 
 ```csharp
+// Graceful shutdown: execute pending, then dispose
 await debounced.FlushAsync();
 await debounced.DisposeAsync();
+
+// Session expiry: discard pending, keep debouncer alive
+debounced.DiscardPending();
+```
+
+### Multiple Debounce Domains
+
+Use separate `CommandDebouncer` instances per domain and route in the command executor:
+
+```csharp
+var searchDebounce = new CommandDebouncer<Cmd, Msg>(
+    TimeSpan.FromMilliseconds(200), innerExecutor, dispatcherQueue);
+var prefsDebounce = new CommandDebouncer<Cmd, Msg>(
+    TimeSpan.FromMilliseconds(500), innerExecutor, dispatcherQueue);
+
+ValueTask<CommandResult<Msg>> Execute(Cmd cmd, Dispatch<Msg> d, CancellationToken ct) =>
+    cmd switch
+    {
+        Cmd.Search    => searchDebounce.Execute(cmd, d, ct),
+        Cmd.SavePrefs => prefsDebounce.Execute(cmd, d, ct),
+        _             => innerExecutor(cmd, d, ct),
+    };
 ```
 
 ## Localisation with Lugha
@@ -150,7 +180,7 @@ public sealed record AppState
 }
 ```
 
-Handle locale switching in `Update`. `Resolve` is total — returns the registry's default
+Handle locale switching in `Update`. `Resolve` is total - returns the registry's default
 locale when no match is found:
 
 ```csharp
@@ -161,7 +191,7 @@ Msg.LocaleSwitched m =>
 Register a segment in your projection that calls `SetLocale` when the locale changes:
 
 ```csharp
-public sealed class AppProjection : StateProjectionBase<AppState>
+public sealed class AppProjection : Projection<AppState>
 {
     public AppProjection(MainWindow window, WinUILocaleHost<IAppLocale> localeHost)
     {
@@ -187,7 +217,7 @@ WinUILocaleHost<IAppLocale> localeHost =
 
 var projection = new AppProjection(mainWindow, localeHost);
 
-_runtime = WinUIMvuRuntime
+_runtime = WinUIRuntime
     .Create(program, mainWindow.DispatcherQueue)
     .WithCommandExecutor(executor)
     .WithSubscriptionStarter(starter)
@@ -211,7 +241,7 @@ For system language synchronisation (persistent `PrimaryLanguageOverride`), call
 ## Related Packages
 
 - **Pamba** - Framework-agnostic core: contracts, dispatch loop, command/subscription infrastructure.
-- **Pamba.Testing** - Test utilities: `MvuTestRunner.UpdateAndValidate` and `MvuScenario` for multi-step flow testing.
+- **Pamba.Testing** - `Scenario` for multi-step flow testing using `program.Step()` / `program.Initialize()`.
 
 ## Licence
 

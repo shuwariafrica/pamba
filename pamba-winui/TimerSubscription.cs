@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
@@ -26,12 +26,14 @@ public static class TimerSubscription
   /// <param name="interval">Time between dispatches.</param>
   /// <param name="createMessage">Factory for the message to dispatch on each tick.</param>
   /// <param name="dispatch">Dispatch function.</param>
+  /// <param name="onError">Error callback for tick handler exceptions. Provided by the runtime via <see cref="SubscriptionStarter{TSub, TMsg}"/>.</param>
   /// <param name="dispatcherQueue">WinUI dispatcher queue.</param>
   /// <returns>An async-disposable that stops the timer when disposed.</returns>
   public static IAsyncDisposable Start<TMsg>(
       TimeSpan interval,
       Func<TMsg> createMessage,
       Dispatch<TMsg> dispatch,
+      Action<Exception> onError,
       DispatcherQueue dispatcherQueue)
   {
     ArgumentNullException.ThrowIfNull(dispatcherQueue);
@@ -40,9 +42,9 @@ public static class TimerSubscription
     timer.IsRepeating = true;
     timer.Tick += (_, _) =>
     {
-#pragma warning disable CA1031 // Framework boundary: tick handler exceptions must not crash the app
+#pragma warning disable CA1031 // Framework boundary: tick handler exceptions routed via onError, must not crash the app
       try { dispatch(createMessage()); }
-      catch (Exception ex) { Trace.TraceError($"Timer subscription tick failed: {ex}"); }
+      catch (Exception ex) { onError(ex); }
 #pragma warning restore CA1031
     };
     timer.Start();
@@ -57,6 +59,7 @@ public static class TimerSubscription
   /// <param name="interval">Time between dispatches.</param>
   /// <param name="createMessage">Factory for the message to dispatch on each tick.</param>
   /// <param name="dispatch">Dispatch function.</param>
+  /// <param name="onError">Error callback for tick handler exceptions.</param>
   /// <param name="dispatcherQueue">WinUI dispatcher queue.</param>
   /// <param name="timeProvider">Time provider. Use a fake for tests.</param>
   /// <returns>An async-disposable that stops the timer when disposed.</returns>
@@ -64,6 +67,7 @@ public static class TimerSubscription
       TimeSpan interval,
       Func<TMsg> createMessage,
       Dispatch<TMsg> dispatch,
+      Action<Exception> onError,
       DispatcherQueue dispatcherQueue,
       TimeProvider timeProvider)
   {
@@ -75,9 +79,9 @@ public static class TimerSubscription
         {
           if (!dispatcherQueue.TryEnqueue(() =>
           {
-#pragma warning disable CA1031 // Framework boundary: tick handler exceptions must not crash the app
+#pragma warning disable CA1031 // Framework boundary: tick handler exceptions routed via onError, must not crash the app
             try { dispatch(createMessage()); }
-            catch (Exception ex) { Trace.TraceError($"Timer subscription tick failed: {ex}"); }
+            catch (Exception ex) { onError(ex); }
 #pragma warning restore CA1031
           }))
           {

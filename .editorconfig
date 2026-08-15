@@ -26,7 +26,7 @@ trim_trailing_whitespace = false
 [*.cs]
 
 # File header - copyright / licence notice (IDE0073)
-file_header_template = Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.\nSee LICENSE in the project root for licence information.
+file_header_template = Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.\nSee LICENSE in the project root for licence information.
 
 # -------------------------------------------------------------------
 # Immutability

@@ -1,14 +1,14 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
+using System.Diagnostics;
 
 namespace Pamba;
 
 /// <summary>
-/// A value representing either success (<see cref="Ok"/>) or failure (<see cref="Err"/>).
-/// The closed hierarchy (private protected constructor) allows exhaustive pattern matching
-/// without a discard arm under <c>AnalysisLevel=latest-all</c>.
+/// Either success (<see cref="Ok"/>) or failure (<see cref="Err"/>). Derivation is closed
+/// to this assembly, so a match covering both cases stays total across future versions.
 /// </summary>
 /// <typeparam name="T">Success value type.</typeparam>
 /// <typeparam name="TErr">Error value type.</typeparam>
@@ -59,13 +59,12 @@ public static class ResultExtensions
     public Result<TResult, TErr> Map<TResult>(Func<T, TResult> f)
     {
       ArgumentNullException.ThrowIfNull(f);
-#pragma warning disable CS8509 // Result<T,TErr> is a closed hierarchy (private protected ctor); discard arm unreachable
       return r switch
       {
         Result<T, TErr>.Ok ok => new Result<TResult, TErr>.Ok(f(ok.Value)),
         Result<T, TErr>.Err err => new Result<TResult, TErr>.Err(err.Error),
+        _ => throw new UnreachableException($"unhandled {r.GetType().Name}"),
       };
-#pragma warning restore CS8509
     }
 
     /// <summary>
@@ -74,13 +73,12 @@ public static class ResultExtensions
     public Result<T, TNewErr> MapErr<TNewErr>(Func<TErr, TNewErr> f)
     {
       ArgumentNullException.ThrowIfNull(f);
-#pragma warning disable CS8509 // Result<T,TErr> is a closed hierarchy (private protected ctor); discard arm unreachable
       return r switch
       {
         Result<T, TErr>.Ok ok => new Result<T, TNewErr>.Ok(ok.Value),
         Result<T, TErr>.Err err => new Result<T, TNewErr>.Err(f(err.Error)),
+        _ => throw new UnreachableException($"unhandled {r.GetType().Name}"),
       };
-#pragma warning restore CS8509
     }
 
     /// <summary>
@@ -90,13 +88,12 @@ public static class ResultExtensions
     public Result<TNew, TErr> Bind<TNew>(Func<T, Result<TNew, TErr>> f)
     {
       ArgumentNullException.ThrowIfNull(f);
-#pragma warning disable CS8509 // Result<T,TErr> is a closed hierarchy (private protected ctor); discard arm unreachable
       return r switch
       {
         Result<T, TErr>.Ok ok => f(ok.Value),
         Result<T, TErr>.Err err => new Result<TNew, TErr>.Err(err.Error),
+        _ => throw new UnreachableException($"unhandled {r.GetType().Name}"),
       };
-#pragma warning restore CS8509
     }
 
     /// <summary>
@@ -111,13 +108,12 @@ public static class ResultExtensions
     public T DefaultWith(Func<TErr, T> fallback)
     {
       ArgumentNullException.ThrowIfNull(fallback);
-#pragma warning disable CS8509 // Result<T,TErr> is a closed hierarchy (private protected ctor); discard arm unreachable
       return r switch
       {
         Result<T, TErr>.Ok ok => ok.Value,
         Result<T, TErr>.Err err => fallback(err.Error),
+        _ => throw new UnreachableException($"unhandled {r.GetType().Name}"),
       };
-#pragma warning restore CS8509
     }
 
     /// <summary>
@@ -135,6 +131,10 @@ public static class ResultExtensions
       {
         onErr(err.Error);
       }
+      else
+      {
+        throw new UnreachableException($"unhandled {r.GetType().Name}");
+      }
     }
 
     /// <summary>
@@ -144,13 +144,12 @@ public static class ResultExtensions
     {
       ArgumentNullException.ThrowIfNull(onOk);
       ArgumentNullException.ThrowIfNull(onErr);
-#pragma warning disable CS8509 // Result<T,TErr> is a closed hierarchy (private protected ctor); discard arm unreachable
       return r switch
       {
         Result<T, TErr>.Ok ok => onOk(ok.Value),
         Result<T, TErr>.Err err => onErr(err.Error),
+        _ => throw new UnreachableException($"unhandled {r.GetType().Name}"),
       };
-#pragma warning restore CS8509
     }
   }
 }

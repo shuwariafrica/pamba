@@ -2,9 +2,9 @@
 
   <!-- NuGet package metadata -->
   <PropertyGroup>
-    <Authors>Ali Rashid</Authors>
-    <Copyright>Copyright (c) Ali Rashid</Copyright>
-    <RepositoryUrl>https://github.com/arashi01/pamba</RepositoryUrl>
+    <Authors>Shuwari Africa</Authors>
+    <Copyright>Copyright (c) Shuwari Africa</Copyright>
+    <RepositoryUrl>https://github.com/shuwariafrica/pamba</RepositoryUrl>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
@@ -24,6 +24,7 @@ public static class PropertyChangedSubscription
   /// </param>
   /// <param name="createMessage">Factory for the message to dispatch on property change.</param>
   /// <param name="dispatch">Dispatch function.</param>
+  /// <param name="onError">Error callback for handler exceptions. Provided by the runtime via <see cref="SubscriptionStarter{TSub, TMsg}"/>.</param>
   /// <param name="dispatcherQueue">
   /// WinUI dispatcher queue. Ensures <paramref name="createMessage"/> runs on the UI thread
   /// regardless of which thread raised the event.
@@ -34,6 +35,7 @@ public static class PropertyChangedSubscription
       string? propertyName,
       Func<TMsg> createMessage,
       Dispatch<TMsg> dispatch,
+      Action<Exception> onError,
       DispatcherQueue dispatcherQueue)
   {
     ArgumentNullException.ThrowIfNull(source);
@@ -48,11 +50,11 @@ public static class PropertyChangedSubscription
     {
       if (propertyName is null || e.PropertyName == propertyName)
       {
-#pragma warning disable CA1031 // Framework boundary: dispatch lambda exceptions must not crash the app
+#pragma warning disable CA1031 // Framework boundary: handler exceptions routed via onError, must not crash the app
         if (!dispatcherQueue.TryEnqueue(() =>
         {
           try { dispatch(createMessage()); }
-          catch (Exception ex) { Trace.TraceError($"PropertyChanged subscription failed: {ex}"); }
+          catch (Exception ex) { onError(ex); }
         }))
         {
           Trace.TraceWarning("PropertyChanged dispatch rejected: queue shut down.");

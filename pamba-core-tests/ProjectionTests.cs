@@ -1,16 +1,16 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System.Collections.Generic;
 using Xunit;
 
-namespace Pamba.WinUI.Tests;
+namespace Pamba.Tests;
 
-public sealed class StateProjectionBaseTests
+public sealed class ProjectionTests
 {
   private sealed record TestState(int Count, string Label) : System.IEquatable<TestState>;
 
-  private sealed class TestProjection : StateProjectionBase<TestState>
+  private sealed class TestProjection : Projection<TestState>
   {
     public List<int> CountProjections { get; } = [];
     public List<string> LabelProjections { get; } = [];
@@ -22,7 +22,7 @@ public sealed class StateProjectionBaseTests
     }
   }
 
-  private sealed class TransitionAwareProjection : StateProjectionBase<TestState>
+  private sealed class TransitionAwareProjection : Projection<TestState>
   {
     public List<int> InitProjections { get; } = [];
     public List<(int Old, int New)> TransitionProjections { get; } = [];

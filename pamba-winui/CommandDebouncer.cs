@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
@@ -119,7 +119,7 @@ public sealed class CommandDebouncer<TCmd, TMsg> : IDisposable, IAsyncDisposable
   /// <summary>
   /// Immediately execute any pending debounced command and stop the timer.
   /// Call during graceful shutdown to ensure pending work completes before disposal.
-  /// After flushing, further <see cref="Execute"/> calls are rejected.
+  /// After flushing, further <see cref="Execute"/> calls are no-ops.
   /// </summary>
   public ValueTask FlushAsync()
   {
@@ -127,6 +127,26 @@ public sealed class CommandDebouncer<TCmd, TMsg> : IDisposable, IAsyncDisposable
     _timer = null;
     _flushed = true;
     return ExecutePendingAsync();
+  }
+
+  /// <summary>
+  /// Cancel any pending debounced command without executing it.
+  /// The debouncer remains usable for subsequent <see cref="Execute"/> calls.
+  /// Use when the pending work is no longer valid (e.g. session expiry).
+  /// </summary>
+  public void DiscardPending()
+  {
+    _timer?.Dispose();
+    _timer = null;
+    _pendingCommand = default;
+    _pendingDispatch = null;
+
+    if (_pendingCts is not null)
+    {
+      _pendingCts.Cancel();
+      _pendingCts.Dispose();
+      _pendingCts = null;
+    }
   }
 
   /// <inheritdoc />

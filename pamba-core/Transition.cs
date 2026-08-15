@@ -1,14 +1,15 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
 using System.Collections.Immutable;
 
-namespace Pamba.Testing;
+namespace Pamba;
 
 /// <summary>
-/// The result of a single state transition, including state, commands, and subscriptions.
-/// Returned by <see cref="MvuTestRunner"/> for assertion.
+/// The result of a single program transition (Update + Validate + Subscriptions)
+/// or initialisation (Init + Validate + Subscriptions).
+/// Returned by <see cref="MvuProgramExtensions"/> for composition and testing.
 /// </summary>
 /// <typeparam name="TState">State type.</typeparam>
 /// <typeparam name="TMsg">Message type.</typeparam>
@@ -19,7 +20,7 @@ namespace Pamba.Testing;
 /// <param name="CorrectionMessage">Non-null when the validator rejected the transition. The corrective message the validator produced.</param>
 /// <param name="Commands">Commands returned by Update. Empty when the transition was rejected by the validator.</param>
 /// <param name="Subscriptions">Active subscriptions for the current state.</param>
-public sealed record TransitionResult<TState, TMsg, TCmd, TSub>(
+public sealed record Transition<TState, TMsg, TCmd, TSub>(
     TState State,
     TMsg? Message,
     TMsg? CorrectionMessage,

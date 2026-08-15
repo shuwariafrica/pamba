@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
@@ -11,7 +11,7 @@ namespace Pamba.Testing;
 /// Entry point for scenario-based testing of MVU programs.
 /// Dispatches message sequences and provides assertion hooks at each step.
 /// </summary>
-public static class MvuScenario
+public static class Scenario
 {
   /// <summary>
   /// Create a scenario runner for the given program.
@@ -25,7 +25,8 @@ public static class MvuScenario
       where TCmd : notnull
       where TSub : IEquatable<TSub>, ISubscription<TMsg>
   {
-    var init = MvuTestRunner.InitAndValidate(program);
+    ArgumentNullException.ThrowIfNull(program);
+    var init = program.Initialize();
     return new ScenarioRunner<TState, TMsg, TCmd, TSub>(program, init);
   }
 
@@ -36,14 +37,15 @@ public static class MvuScenario
   public static ScenarioRunner<TState, TMsg, TCmd, TSub>
       For<TState, TMsg, TCmd, TSub>(
           MvuProgram<TState, TMsg, TCmd, TSub> program,
-          Action<TransitionResult<TState, TMsg, TCmd, TSub>> assertInit)
+          Action<Transition<TState, TMsg, TCmd, TSub>> assertInit)
       where TState : IEquatable<TState>
       where TMsg : notnull
       where TCmd : notnull
       where TSub : IEquatable<TSub>, ISubscription<TMsg>
   {
+    ArgumentNullException.ThrowIfNull(program);
     ArgumentNullException.ThrowIfNull(assertInit);
-    var init = MvuTestRunner.InitAndValidate(program);
+    var init = program.Initialize();
     assertInit(init);
     return new ScenarioRunner<TState, TMsg, TCmd, TSub>(program, init);
   }
@@ -64,13 +66,13 @@ public sealed class ScenarioRunner<TState, TMsg, TCmd, TSub>
     where TSub : IEquatable<TSub>, ISubscription<TMsg>
 {
   private readonly MvuProgram<TState, TMsg, TCmd, TSub> _program;
-  private readonly List<TransitionResult<TState, TMsg, TCmd, TSub>> _history;
-  private ImmutableArray<TransitionResult<TState, TMsg, TCmd, TSub>>? _cachedHistory;
+  private readonly List<Transition<TState, TMsg, TCmd, TSub>> _history;
+  private ImmutableArray<Transition<TState, TMsg, TCmd, TSub>>? _cachedHistory;
   private TState _currentState;
 
   internal ScenarioRunner(
       MvuProgram<TState, TMsg, TCmd, TSub> program,
-      TransitionResult<TState, TMsg, TCmd, TSub> initResult)
+      Transition<TState, TMsg, TCmd, TSub> initResult)
   {
     _program = program;
     _currentState = initResult.State;
@@ -81,16 +83,15 @@ public sealed class ScenarioRunner<TState, TMsg, TCmd, TSub>
   public TState State => _currentState;
 
   /// <summary>Full transition history including Init.</summary>
-  public ImmutableArray<TransitionResult<TState, TMsg, TCmd, TSub>> History =>
+  public ImmutableArray<Transition<TState, TMsg, TCmd, TSub>> History =>
       _cachedHistory ??= [.. _history];
 
   /// <summary>Dispatch a message and optionally assert on the result.</summary>
   public ScenarioRunner<TState, TMsg, TCmd, TSub> Dispatch(
       TMsg message,
-      Action<TransitionResult<TState, TMsg, TCmd, TSub>>? assert)
+      Action<Transition<TState, TMsg, TCmd, TSub>>? assert)
   {
-    TransitionResult<TState, TMsg, TCmd, TSub> result =
-        MvuTestRunner.UpdateAndValidate(_program, _currentState, message);
+    Transition<TState, TMsg, TCmd, TSub> result = _program.Step(_currentState, message);
     _currentState = result.State;
     _history.Add(result);
     _cachedHistory = null;
@@ -122,11 +123,10 @@ public sealed class ScenarioRunner<TState, TMsg, TCmd, TSub>
   /// </summary>
   public ScenarioRunner<TState, TMsg, TCmd, TSub> DispatchWithCorrections(
       TMsg message,
-      Action<TransitionResult<TState, TMsg, TCmd, TSub>>? assert,
+      Action<Transition<TState, TMsg, TCmd, TSub>>? assert,
       int maxDepth)
   {
-    TransitionResult<TState, TMsg, TCmd, TSub> result =
-        MvuTestRunner.UpdateAndValidate(_program, _currentState, message);
+    Transition<TState, TMsg, TCmd, TSub> result = _program.Step(_currentState, message);
     _currentState = result.State;
     _history.Add(result);
     _cachedHistory = null;
@@ -135,8 +135,7 @@ public sealed class ScenarioRunner<TState, TMsg, TCmd, TSub>
     int depth = 0;
     while (result.CorrectionMessage is not null && depth < maxDepth)
     {
-      result = MvuTestRunner.UpdateAndValidate(
-          _program, _currentState, result.CorrectionMessage);
+      result = _program.Step(_currentState, result.CorrectionMessage);
       _currentState = result.State;
       _history.Add(result);
       _cachedHistory = null;
@@ -166,7 +165,7 @@ public sealed class ScenarioRunner<TState, TMsg, TCmd, TSub>
 
   /// <summary>Assert on the full transition history.</summary>
   public ScenarioRunner<TState, TMsg, TCmd, TSub> AssertHistory(
-      Action<ImmutableArray<TransitionResult<TState, TMsg, TCmd, TSub>>> assert)
+      Action<ImmutableArray<Transition<TState, TMsg, TCmd, TSub>>> assert)
   {
     ArgumentNullException.ThrowIfNull(assert);
     assert(History);
@@ -175,7 +174,7 @@ public sealed class ScenarioRunner<TState, TMsg, TCmd, TSub>
 
   /// <summary>Assert on the last transition result.</summary>
   public ScenarioRunner<TState, TMsg, TCmd, TSub> AssertLastTransition(
-      Action<TransitionResult<TState, TMsg, TCmd, TSub>> assert)
+      Action<Transition<TState, TMsg, TCmd, TSub>> assert)
   {
     ArgumentNullException.ThrowIfNull(assert);
     assert(_history[^1]);

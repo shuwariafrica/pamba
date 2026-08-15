@@ -1,4 +1,4 @@
-// Copyright (c) 2026 Ali Rashid. Licensed under the Apache License, Version 2.0.
+// Copyright (c) 2026 Shuwari Africa. Licensed under the Apache License, Version 2.0.
 // See LICENSE in the project root for licence information.
 
 using System;
@@ -6,7 +6,11 @@ using Xunit;
 
 namespace Pamba.Testing.Tests;
 
-public sealed class MvuTestRunnerTests
+/// <summary>
+/// Tests for <see cref="MvuProgramExtensions"/> (<c>Step</c> and <c>Initialize</c>)
+/// and <see cref="TransitionExtensions"/>.
+/// </summary>
+public sealed class MvuProgramExtensionsTests
 {
   private sealed record TestState(int Count);
 
@@ -41,9 +45,9 @@ public sealed class MvuTestRunnerTests
   };
 
   [Fact]
-  public void InitAndValidate_returns_initial_state_and_subscriptions()
+  public void Initialize_returns_initial_state_and_subscriptions()
   {
-    TransitionResult<TestState, TestMsg, TestCmd, TestSub> result = MvuTestRunner.InitAndValidate(_program);
+    Transition<TestState, TestMsg, TestCmd, TestSub> result = _program.Initialize();
 
     Assert.Equal(0, result.State.Count);
     Assert.Empty(result.Commands);
@@ -53,11 +57,11 @@ public sealed class MvuTestRunnerTests
   }
 
   [Fact]
-  public void UpdateAndValidate_returns_state_commands_and_subscriptions()
+  public void Step_returns_state_commands_and_subscriptions()
   {
     TestState initial = new(0);
-    TransitionResult<TestState, TestMsg, TestCmd, TestSub> result =
-        MvuTestRunner.UpdateAndValidate(_program, initial, new TestMsg.SetCount(5));
+    Transition<TestState, TestMsg, TestCmd, TestSub> result =
+        _program.Step(initial, new TestMsg.SetCount(5));
 
     Assert.Equal(5, result.State.Count);
     Assert.Single(result.Commands);
@@ -68,11 +72,11 @@ public sealed class MvuTestRunnerTests
   }
 
   [Fact]
-  public void UpdateAndValidate_returns_correction_message_when_validation_rejects()
+  public void Step_returns_correction_message_when_validation_rejects()
   {
     TestState initial = new(0);
-    TransitionResult<TestState, TestMsg, TestCmd, TestSub> result =
-        MvuTestRunner.UpdateAndValidate(_program, initial, new TestMsg.SetCount(-1));
+    Transition<TestState, TestMsg, TestCmd, TestSub> result =
+        _program.Step(initial, new TestMsg.SetCount(-1));
 
     // Transition rejected: state reverts to initial, commands dropped
     Assert.Equal(0, result.State.Count);
@@ -82,20 +86,19 @@ public sealed class MvuTestRunnerTests
   }
 
   [Fact]
-  public void TransitionResult_extension_WasRejected_reflects_correction()
+  public void Transition_extension_WasRejected_reflects_correction()
   {
-    // P4: TransitionResultExtensions
     TestState initial = new(0);
 
-    TransitionResult<TestState, TestMsg, TestCmd, TestSub> accepted =
-        MvuTestRunner.UpdateAndValidate(_program, initial, new TestMsg.SetCount(5));
+    Transition<TestState, TestMsg, TestCmd, TestSub> accepted =
+        _program.Step(initial, new TestMsg.SetCount(5));
     Assert.True(accepted.WasAccepted);
     Assert.False(accepted.WasRejected);
     Assert.True(accepted.HasCommands);
     Assert.True(accepted.HasSubscriptions);
 
-    TransitionResult<TestState, TestMsg, TestCmd, TestSub> rejected =
-        MvuTestRunner.UpdateAndValidate(_program, initial, new TestMsg.SetCount(-1));
+    Transition<TestState, TestMsg, TestCmd, TestSub> rejected =
+        _program.Step(initial, new TestMsg.SetCount(-1));
     Assert.True(rejected.WasRejected);
     Assert.False(rejected.WasAccepted);
     Assert.False(rejected.HasCommands);
