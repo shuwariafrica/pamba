@@ -7,7 +7,7 @@
   <ItemGroup>
     <!-- WinUI / Windows App SDK -->
     <PackageVersion Include="Microsoft.WindowsAppSDK" Version="1.8.260317003" />
-    <PackageVersion Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7705" />
+    <PackageVersion Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
   </ItemGroup>
 
   <ItemGroup>
