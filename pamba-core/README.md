@@ -115,9 +115,18 @@ MvuRuntime<TState, TMsg, TCmd, TSub> runtime = MvuRuntimeBuilder
 | 2        | `enqueue`, `onStateChanged`           | React to every state change                 |
 | 3        | `enqueue`, `onInit`, `onStateChanged` | React to initial state + every state change |
 
-The `enqueue` parameter is the thread dispatcher. For WinUI:
-`DispatcherQueue.TryEnqueue`. For tests: `action => action()`.
-For Avalonia: `Dispatcher.UIThread.Post`.
+`enqueue` is `Func<Action, bool>`, and the `bool` is load-bearing: `false` means the queue
+has shut down, which the runtime reports as `PambaError.DispatchRejected` rather than
+mutating state with no thread to do it on. A toolkit whose own enqueue primitive returns
+`void` has no way to say that, so it returns `true`.
+
+The primitive is wrapped in a lambda rather than passed as a method group, because its
+handler parameter is the toolkit's own delegate type rather than `Action`:
+
+```csharp
+Func<Action, bool> winui = action => dispatcherQueue.TryEnqueue(() => action());
+Func<Action, bool> synchronous = action => { action(); return true; };
+```
 
 ### Dispatch Mechanics
 
@@ -181,7 +190,7 @@ using MvuRuntime<AppState, Msg, Cmd, Sub> runtime = MvuRuntimeBuilder
     .Create(Program)
     .WithCommandExecutor(myExecutor)
     .WithSubscriptionStarter(myStarter)
-    .WithDispatcher(dispatcherQueue.TryEnqueue)
+    .WithDispatcher(action => dispatcherQueue.TryEnqueue(() => action()))
     .Start();
 
 runtime.Dispatch(new Msg.Increment());
