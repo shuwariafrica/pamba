@@ -1,4 +1,4 @@
-# Contributing to Pamba
+# Contributing to pamba
 
 Every pull request to `main` runs the checks of
 [`shuwariafrica/public-crates`](https://github.com/shuwariafrica/public-crates), which the
@@ -29,7 +29,9 @@ cargo semver-checks
 ```
 
 `cargo semver-checks` compares each crate with its last release on crates.io; before a crate's
-first release the checks skip it and say so in the run's summary.
+first release the checks skip it and say so in the run's summary. While public-crates' `projects.json`
+lists a git source for this project, the checks skip `cargo package`, which resolves from crates.io
+alone, and name the release each source awaits.
 
 Before those, the checks refuse a tree:
 
