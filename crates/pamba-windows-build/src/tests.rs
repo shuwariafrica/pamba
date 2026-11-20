@@ -164,6 +164,26 @@ fn a_package_whose_bytes_are_the_ones_held_is_unpacked_once_and_found_again() {
 }
 
 #[test]
+fn what_a_stopped_build_left_for_the_package_is_removed_before_it_is_fetched() {
+    let cache = TempDir::new();
+    let digest = held(BYTES);
+    write(
+        &cache.0.join(format!("{digest}.nupkg-1")),
+        "a download cut short",
+    );
+    write(
+        &cache.0.join(format!("{digest}.partial-1")).join(NEEDED),
+        "an unpacking cut short",
+    );
+    let tools = Fake::new(BYTES, vec![NEEDED]);
+
+    let dir = unpacked(&cache.0, &package(&digest), Path::new(NEEDED), &tools).unwrap();
+
+    assert_eq!(dir, cache.0.join(&digest));
+    assert_eq!(names(&cache.0), BTreeSet::from([digest]));
+}
+
+#[test]
 fn a_download_that_did_not_arrive_leaves_nothing_behind() {
     let cache = TempDir::new();
     let digest = held(BYTES);

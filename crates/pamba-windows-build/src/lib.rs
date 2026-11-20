@@ -41,7 +41,8 @@ const WEBVIEW2_CORE_DLL: &str = "Microsoft.Web.WebView2.Core.dll";
 const MSIX_FILES: [&str; 2] = ["Microsoft.WindowsAppRuntime.dll", "Microsoft.ui.xaml.dll"];
 
 /// Stages the Windows App Runtime beside the program's executable and marks the executable to
-/// load it from there, so the program starts on a machine with nothing of Microsoft's installed.
+/// load it from there, so the program starts on a Windows computer that has no Windows App Runtime
+/// installed.
 ///
 /// Each of the runtime's two packages is downloaded from nuget.org and unpacked only where the
 /// SHA-256 of the whole download is the one this version of Pamba holds, which defends the build
@@ -49,6 +50,11 @@ const MSIX_FILES: [&str; 2] = ["Microsoft.WindowsAppRuntime.dll", "Microsoft.ui.
 /// kept in `%LOCALAPPDATA%\pamba\windows-app-runtime\`, one directory named by each digest, and
 /// a later build takes it from there without downloading: that directory is trusted as the
 /// building person's own.
+///
+/// The folder beside the executable is found from `OUT_DIR`, the one place Cargo names to a build
+/// script. A build whose `build.build-dir` is set apart from its target directory therefore has
+/// the runtime staged in the build directory's profile folder, where the executable is not: leave
+/// `build.build-dir` unset for a program built this way.
 ///
 /// It does nothing where the target is not Windows, so a program's build script calls it on
 /// every platform its workspace is checked on. It does nothing either where the machine that
@@ -379,7 +385,9 @@ fn unpacked(
 ) -> Result<PathBuf, Unstaged> {
     let dir = cache.join(package.sha256);
     if !is_dir(&dir)? {
-        let download = cache.join(format!("{}.nupkg-{}", package.sha256, process::id()));
+        let downloads = format!("{}.nupkg-", package.sha256);
+        remove_left(cache, &downloads)?;
+        let download = cache.join(format!("{downloads}{}", process::id()));
         verified(package, &download, tools)?;
         let whole = whole(cache, package.sha256, |partial| {
             tools.unpack(&download, partial, Strip::First)?;
@@ -452,17 +460,7 @@ fn whole(
     fill: impl FnOnce(&Path) -> Result<(), Unstaged>,
 ) -> Result<PathBuf, Unstaged> {
     let prefix = format!("{name}.partial-");
-    for entry in fs::read_dir(parent).map_err(|error| file_error("read", parent, error))? {
-        let entry = entry.map_err(|error| file_error("read", parent, error))?;
-        if entry
-            .file_name()
-            .to_str()
-            .is_some_and(|entry| entry.starts_with(&prefix))
-        {
-            let path = entry.path();
-            fs::remove_dir_all(&path).map_err(|error| file_error("remove", &path, error))?;
-        }
-    }
+    remove_left(parent, &prefix)?;
     let partial = parent.join(format!("{prefix}{}", process::id()));
     fs::create_dir(&partial).map_err(|error| file_error("create", &partial, error))?;
     if let Err(unstaged) = fill(&partial) {
@@ -474,6 +472,33 @@ fn whole(
     let dir = parent.join(name);
     fs::rename(&partial, &dir).map_err(|error| file_error("rename into place", &dir, error))?;
     Ok(dir)
+}
+
+/// Removes every entry of `parent` whose name starts with `prefix`: what a build that was stopped
+/// left there, under a name carrying its process id. The caller holds the lock that keeps any
+/// other build from writing such an entry.
+fn remove_left(parent: &Path, prefix: &str) -> Result<(), Unstaged> {
+    for entry in fs::read_dir(parent).map_err(|error| file_error("read", parent, error))? {
+        let entry = entry.map_err(|error| file_error("read", parent, error))?;
+        if entry
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.starts_with(prefix))
+        {
+            let path = entry.path();
+            let is_dir = entry
+                .file_type()
+                .map_err(|error| file_error("read", &path, error))?
+                .is_dir();
+            let removed = if is_dir {
+                fs::remove_dir_all(&path)
+            } else {
+                fs::remove_file(&path)
+            };
+            removed.map_err(|error| file_error("remove", &path, error))?;
+        }
+    }
+    Ok(())
 }
 
 fn require(package: &Package<'_>, dir: &Path, file: &Path) -> Result<(), Unstaged> {
