@@ -23,5 +23,8 @@ carries over.
   says a word through Windows itself where WinUI could not start.
 - `pamba-windows-build`, what the build script of a program on the Windows layer calls, so that
   the program starts on a Windows computer that has no Windows App Runtime installed. It stages
-  the runtime beside the executable, and takes each of its two downloads only where its SHA-256
-  is the one this version holds.
+  the runtime beside the executable, with the licence texts of its two packages in `licenses`,
+  and takes each of its two downloads only where its SHA-256 is the one this version holds. A
+  build at an earlier revision of this rewrite kept the packages in
+  `%LOCALAPPDATA%\pamba\windows-app-runtime\`, which can be deleted once no program on the
+  machine builds at such a revision.
