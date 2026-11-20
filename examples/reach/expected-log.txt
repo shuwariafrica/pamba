@@ -1,7 +1,9 @@
 reach starts
 the window stands at 300 200, 900 by 640, maximized false
+the line holds the keyboard
 the line is taken
 the line is let go (capture lost) and stands at 200
+the line let the keyboard go
 asked to copy by the press
 copied "pamba reach 1"
 the line holds the keyboard
@@ -18,3 +20,7 @@ the line is taken
 the line is let go (released) and stands at 310
 the block in the scroller is pressed
 the block in the scroller: capture lost, having seen no move
+asked to stand the keyboard at the line
+the line holds the keyboard
+the line let the keyboard go
+asked to open, and to stand the keyboard at what opens

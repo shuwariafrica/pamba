@@ -7,10 +7,12 @@ use std::sync::Arc;
 
 use pamba::{Loop, Performer, Program};
 use windows_reactor::{
-    App, Callback, Component, ComponentContext, LocalSender, RoutedCallback, View, ViewContext,
+    App, Border, Callback, Component, ComponentContext, FocusEventInfo, LocalSender,
+    RoutedCallback, View, ViewContext,
 };
 
 use crate::beside;
+use crate::named;
 use crate::threads::Threads;
 use crate::window::Window;
 
@@ -119,6 +121,9 @@ struct Host<P: Program, W: Performer<P>, V> {
     running: Loop<P, W>,
     view: V,
     threads: Arc<Threads>,
+    /// Told whenever a control of the window takes the keyboard; the same callback at every
+    /// drawing.
+    took: Callback<FocusEventInfo>,
 }
 
 impl<P, W, V> Host<P, W, V>
@@ -154,6 +159,9 @@ where
         };
         let threads = Arc::new(Threads::default());
         let dispatcher: Arc<dyn pamba::Dispatcher> = threads.clone();
+        // Before the loop starts: an effect of the program's construction may ask where the
+        // keyboard stands at the start.
+        named::stands();
         let running = Loop::start(parts.program, parts.effects, parts.performer, dispatcher);
         Self::wait(&threads, context);
         // What Pamba reaches through Windows beside the reactor is reached for this window.
@@ -165,6 +173,7 @@ where
             running,
             view: parts.view,
             threads,
+            took: Callback::new(|_: FocusEventInfo| named::took()),
         }
     }
 
@@ -183,7 +192,17 @@ where
         let messages = Messages {
             sender: context.sender(),
         };
-        let window = (self.view)(self.running.program(), &messages);
+        let (window, asks) = named::drawing(|| (self.view)(self.running.program(), &messages));
+        // The reactor runs this once this drawing stands, with every control it names in place,
+        // and only where an ask was made since the drawing before.
+        context.use_effect(
+            "pamba-windows: what was asked of a named control",
+            asks,
+            || {
+                named::carry_out();
+                None
+            },
+        );
         if let Some(title) = window.title {
             context.window_title(title);
         }
@@ -199,13 +218,21 @@ where
         if let Some(placed) = window.placed {
             context.on_window_placement(placed);
         }
-        window.content
+        // The reactor tells of the keyboard's coming through a `Border` alone, and a control's
+        // taking it is told to every element it stands in. So the content stands in one that
+        // draws nothing, and the first control to take the keyboard is how the window's content
+        // is known to be on the screen: an ask made before then is carried out at that.
+        Border::new()
+            .on_got_focus(self.took.clone())
+            .content(window.content)
+            .into()
     }
 }
 
 impl<P: Program, W: Performer<P>, V> Drop for Host<P, W, V> {
     fn drop(&mut self) {
         beside::gone();
+        named::gone();
         self.threads.end();
     }
 }

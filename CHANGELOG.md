@@ -13,11 +13,15 @@ carries over.
 - `pamba`, the loop. A `Program` answers each message by changing its state and returning its side
   effects as data; a `Performer` carries them out on one platform; a `Loop` runs the two on the
   thread that draws. `Manual` runs a program and its performer in a test with no window and no
-  second thread.
+  second thread. `Places` keeps, for a platform's layer, the places a program names from one
+  drawing to the next.
 - `pamba-windows`, the Windows layer. `run` opens a program's window, drawn with WinUI 3 through
   Microsoft's `windows-reactor`, whose controls are all under `ui`. `Messages` turns what a control
   reports into a message of the program's, and `Messages::routed` lets a program take a key or a
-  pointer for itself. `copy` puts text on the clipboard. `tell` says a word through Windows itself
-  where WinUI could not start.
+  pointer for itself. `named` gives a control a name of the program's, and `focus` stands the
+  keyboard at it once the drawing after the step stands. `copy` puts text on the clipboard. `tell`
+  says a word through Windows itself where WinUI could not start.
 - `pamba-windows-build`, what the build script of a program on the Windows layer calls, so that
-  the program starts on a computer with nothing of Microsoft's installed.
+  the program starts on a Windows computer that has no Windows App Runtime installed. It stages
+  the runtime beside the executable, and takes each of its two downloads only where its SHA-256
+  is the one this version holds.

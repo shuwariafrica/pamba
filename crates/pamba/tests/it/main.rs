@@ -8,5 +8,6 @@
 
 mod bound;
 mod order;
+mod places;
 mod probe;
 mod subscriptions;

@@ -2,7 +2,9 @@
 //!
 //! It draws a line that asks Windows' pointer for a line that is dragged, takes the keyboard and
 //! follows the pointer and the arrow keys; a press that copies; a block that takes the pointer
-//! inside a scroller; and a window that opens at a place it names and says where it stands.
+//! inside a scroller; a window that opens at a place it names and says where it stands; and the
+//! keyboard stood where the program asks: at the line when the program starts and when a press
+//! asks it, and at a press that the drawing shows only once another has been pressed.
 //! Every thing it observes is appended, a line each, to the file its first argument names.
 //!
 //! It is the proof a move of the reactor's commit owes. On a signed-in Windows desktop, start it
@@ -10,7 +12,7 @@
 //! manifest; the steps name the screen places of a window at 300, 200 on a screen at 100 per
 //! cent scale, and the process to bring to the front). The log is then `expected-log.txt` line
 //! for line, and what the script read of the pointer, the clipboard and the keyboard's focus is
-//! `expected-answers.txt`. The last two lines of the log are a finger's: it drags the line, and
+//! `expected-answers.txt`. Lines 19 to 22 of the log are a finger's: it drags the line, and
 //! inside the scroller it is taken by the scroll before the block sees it move.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
@@ -34,8 +36,9 @@ mod shown {
     use pamba::{Never, Performer, Program, Running, Sender};
     use pamba_windows::ui::{
         Border, Button, FocusEventInfo, HorizontalAlignment, InputModifiers,
-        InputSystemCursorShape, KeyEventInfo, PointerEventInfo, ScrollViewer, StackPanel,
-        TextBlock, ThemeBrush, Thickness, VirtualKey, WindowPlacement, WindowVisuals,
+        InputSystemCursorShape, KeyEventInfo, Orientation, PointerEventInfo, ScrollViewer,
+        StackPanel, TextBlock, ThemeBrush, Thickness, View, VirtualKey, WindowPlacement,
+        WindowVisuals,
     };
     use pamba_windows::{Fault, Messages, Window};
 
@@ -51,6 +54,15 @@ mod shown {
         copies: u32,
         /// The moves seen since the pointer last went down in the scroller.
         moves: u32,
+        /// Whether the press that opens has been pressed, so that what it opens is drawn.
+        opened: bool,
+    }
+
+    /// The controls the program asks the keyboard to stand at.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    enum Place {
+        Line,
+        Opened,
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -71,12 +83,15 @@ mod shown {
         Pressed,
         Scroller(&'static str),
         ScrollerMoved,
+        Stand,
+        Open,
     }
 
     #[derive(Debug)]
     enum Effect {
         Note(String),
         Copy(String),
+        Stand(Place),
     }
 
     fn note(said: &str) -> Vec<Effect> {
@@ -158,6 +173,19 @@ mod shown {
                     self.moves += 1;
                     Vec::new()
                 }
+                Message::Stand => vec![
+                    Effect::Note("asked to stand the keyboard at the line".to_owned()),
+                    Effect::Stand(Place::Line),
+                ],
+                Message::Open => {
+                    self.opened = true;
+                    vec![
+                        Effect::Note(
+                            "asked to open, and to stand the keyboard at what opens".to_owned(),
+                        ),
+                        Effect::Stand(Place::Opened),
+                    ]
+                }
             }
         }
     }
@@ -184,6 +212,7 @@ mod shown {
                     Ok(()) => self.note(&format!("copied \"{text}\"")),
                     Err(why) => self.note(&format!("not copied: {why}")),
                 },
+                Effect::Stand(place) => pamba_windows::focus(place),
             }
         }
 
@@ -192,8 +221,10 @@ mod shown {
         }
     }
 
-    fn view(reach: &Reach, messages: &Messages<Message>) -> Window {
-        let line = Border::new()
+    /// The line: dragged by the pointer, moved by the arrow keys, and a place the keyboard is
+    /// stood at.
+    fn line(reach: &Reach, messages: &Messages<Message>) -> Border {
+        Border::new()
             .width(12.0)
             .height(120.0)
             .horizontal_alignment(HorizontalAlignment::Left)
@@ -206,6 +237,7 @@ mod shown {
             .pointer_cursor(InputSystemCursorShape::SizeWestEast)
             .is_tab_stop(true)
             .automation_name("The line")
+            .element_ref(&pamba_windows::named(Place::Line))
             .capture_pointer_on_press(true)
             .on_got_focus(messages.callback(|_: FocusEventInfo| Message::Focus(true)))
             .on_lost_focus(messages.callback(|_: FocusEventInfo| Message::Focus(false)))
@@ -228,8 +260,11 @@ mod shown {
             .on_pointer_moved(messages.callback(|at: PointerEventInfo| Message::At(at.window_x)))
             .on_pointer_released(messages.callback(|_: PointerEventInfo| Message::Let("released")))
             .on_pointer_capture_lost(messages.message(Message::Let("capture lost")))
-            .on_pointer_canceled(messages.message(Message::Let("canceled")));
+            .on_pointer_canceled(messages.message(Message::Let("canceled")))
+    }
 
+    /// A block that takes the pointer, inside a scroller that scrolls.
+    fn scroller(messages: &Messages<Message>) -> ScrollViewer {
         let held = Border::new()
             .height(120.0)
             .background(ThemeBrush::CardBackground)
@@ -251,7 +286,44 @@ mod shown {
                 .height(1200.0)
                 .content(TextBlock::new().text("What the scroller scrolls")),
         ));
+        ScrollViewer::new().height(200.0).content(tall)
+    }
 
+    /// The presses that ask where the keyboard stands, and what one of them opens.
+    fn asks(reach: &Reach, messages: &Messages<Message>) -> StackPanel {
+        let ask = |name: &'static str, message: Message| {
+            Button::new()
+                .width(160.0)
+                .height(32.0)
+                .automation_name(name)
+                .on_click(messages.message(message))
+                .content(name)
+        };
+        // What opens is drawn only once it has been asked for: the drawing that first shows it
+        // is the one the keyboard is stood in. The reactor tells of the keyboard's coming for a
+        // `Border` alone, so where it stands is read from Windows by the script.
+        let mut pressed: Vec<View> = vec![
+            ask("Stand at the line", Message::Stand).into(),
+            ask("Open", Message::Open).into(),
+        ];
+        if reach.opened {
+            pressed.push(
+                Button::new()
+                    .width(160.0)
+                    .height(32.0)
+                    .automation_name("Opened")
+                    .element_ref(&pamba_windows::named(Place::Opened))
+                    .content("Opened")
+                    .into(),
+            );
+        }
+        StackPanel::new()
+            .orientation(Orientation::Horizontal)
+            .spacing(12.0)
+            .children(pressed)
+    }
+
+    fn view(reach: &Reach, messages: &Messages<Message>) -> Window {
         let content = StackPanel::new()
             .spacing(12.0)
             .margin(Thickness::uniform(16.0))
@@ -264,8 +336,9 @@ mod shown {
                     .automation_name("Copy")
                     .on_click(messages.message(Message::Pressed))
                     .content("Copy"),
-                line,
-                ScrollViewer::new().height(200.0).content(tall),
+                line(reach, messages),
+                scroller(messages),
+                asks(reach, messages),
             ));
         Window::new(content)
             .title("Reach")
@@ -291,7 +364,10 @@ mod shown {
             focused: false,
             copies: 0,
             moves: 0,
+            opened: false,
         };
-        pamba_windows::run(reach, Vec::new(), hand, view)
+        // The program starts with the keyboard at the line, which is not the first control that
+        // can take it.
+        pamba_windows::run(reach, vec![Effect::Stand(Place::Line)], hand, view)
     }
 }

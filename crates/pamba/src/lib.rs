@@ -11,6 +11,10 @@
 //! no window, thread or clock. A program with its real performer runs the same way under
 //! [`Manual`].
 //!
+//! What a platform's layer needs beside the loop is here too: [`Places`] keeps the places a
+//! program names for what one drawing after another shows, so that what the program asks of a
+//! place reaches the control that stands there.
+//!
 //! The Windows layer, which draws a program with WinUI 3, is the crate `pamba-windows`.
 
 #![forbid(unsafe_code)]
@@ -18,11 +22,13 @@
 mod mailbox;
 mod manual;
 mod performer;
+mod places;
 mod program;
 mod run;
 
 pub use mailbox::{Dispatcher, Sender, Unsent};
 pub use manual::{Manual, Unsettled};
 pub use performer::{Performer, Running};
+pub use places::Places;
 pub use program::{Never, Program};
 pub use run::{Loop, ROOM, Turn};

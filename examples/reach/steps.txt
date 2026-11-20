@@ -1,6 +1,7 @@
 wait 1200
 front reach
 wait 600
+focus
 move 430 382
 wait 500
 cursor
@@ -30,3 +31,9 @@ touch 540 382 640 382
 wait 600
 touch 700 520 800 520
 wait 600
+click 396 684
+wait 500
+focus
+click 568 684
+wait 500
+focus
