@@ -1,11 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/pamba", "crates/pamba-windows"]
+members = ["crates/pamba", "crates/pamba-windows", "crates/pamba-windows-build", "examples/counter", "examples/reach"]
 
 [workspace.package]
 version = "0.4.0"
 edition = "2024"
-rust-version = "1.99"
+rust-version = "1.100.0"
 license = "Apache-2.0"
 repository = "https://github.com/shuwariafrica/pamba"
 keywords = ["gui", "loop", "effects", "elm", "native"]
@@ -13,9 +13,21 @@ categories = ["gui"]
 
 [workspace.dependencies]
 pamba = { path = "crates/pamba", version = "0.4.0" }
-windows-reactor = "0.100.0"
+pamba-windows = { path = "crates/pamba-windows", version = "0.4.0" }
+pamba-windows-build = { path = "crates/pamba-windows-build", version = "0.4.0" }
+# A departure with its end. The released `windows-reactor`, 0.100.0, gives a program no key of its own, no pointer
+# shape, no focus on what it draws and no place for its window. Microsoft's `master` gives each, unreleased, so the
+# reactor and its setup crate are named at one commit of it, read and run before it was taken. Pamba is published
+# nowhere while it names a git source. The day 0.101.0 is on crates.io these two lines name it, in the change that
+# removes this source's allowance from `deny.toml`. Moving the commit owes Pamba's cases and `examples/reach` run
+# on a Windows desktop.
+windows-reactor = { git = "https://github.com/microsoft/windows-rs", rev = "63a5e3d9b9afbd57c382d0a4f5a367f134e9dc25", version = "0.101.0" }
+windows-reactor-setup = { git = "https://github.com/microsoft/windows-rs", rev = "63a5e3d9b9afbd57c382d0a4f5a367f134e9dc25", version = "0.100.1" }
+windows-threading = "0.100.0"
 
 [workspace.lints.rust]
+# Every warning of the compiler's is an error, here and in CI alike.
+warnings = { level = "deny", priority = -1 }
 future_incompatible = { level = "deny", priority = -1 }
 nonstandard_style = { level = "deny", priority = -1 }
 unused = { level = "deny", priority = -1 }
@@ -23,6 +35,12 @@ unreachable_pub = "deny"
 unsafe_op_in_unsafe_fn = "deny"
 elided_lifetimes_in_paths = "deny"
 trivial_casts = "deny"
+
+[workspace.lints.rustdoc]
+all = { level = "deny", priority = -1 }
+
+[workspace.lints.cargo]
+unused_dependencies = "deny"
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

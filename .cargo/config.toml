@@ -1,2 +1,3 @@
-[build]
-warnings = "deny"
+# A new version of a dependency is not taken until it is seven days old.
+[registry]
+global-min-publish-age = "7 days"

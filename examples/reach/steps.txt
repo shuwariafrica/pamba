@@ -1,0 +1,32 @@
+wait 1200
+front reach
+wait 600
+move 430 382
+wait 500
+cursor
+move 700 300
+wait 400
+cursor
+drag 430 382 530 382
+wait 400
+clear
+click 351 294
+wait 500
+clipboard
+clear
+keys {TAB}
+wait 200
+focus
+keys {RIGHT}
+keys {RIGHT}
+keys {LEFT}
+wait 200
+keys ^c
+wait 500
+clipboard
+drag 700 520 800 520
+wait 500
+touch 540 382 640 382
+wait 600
+touch 700 520 800 520
+wait 600

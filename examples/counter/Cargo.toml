@@ -1,0 +1,21 @@
+[package]
+name = "counter"
+description = "The smallest program on Pamba's Windows layer: a count, a press and a title"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+pamba.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+pamba-windows.workspace = true
+
+[build-dependencies]
+pamba-windows-build.workspace = true
+
+[lints]
+workspace = true

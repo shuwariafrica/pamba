@@ -1,0 +1,44 @@
+# The dependency policy `cargo deny check` enforces.
+
+[graph]
+all-features = true
+
+[advisories]
+# A vulnerability is always an error; a crate its maintainers have left, an unsound one, or a version its registry
+# withdrew is one too, wherever it sits in the graph.
+unmaintained = "all"
+unsound = "all"
+yanked = "deny"
+
+[licenses]
+# Pamba is Apache-2.0 and is linked into programs under any licence, so a dependency is admitted only under a
+# permissive licence whose terms are met by carrying its notices. A crate offering a choice is admitted by any one of
+# them, and every other licence is refused.
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.93
+unused-allowed-license = "allow"
+
+[bans]
+# Transitive crates choose their own versions, as the workspace's `multiple_crate_versions` allows.
+multiple-versions = "allow"
+wildcards = "deny"
+# A workspace member is named by path.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+# `windows-reactor` and its setup crate, at the one commit the workspace's manifest names, until 0.101.0 is released.
+allow-git = ["https://github.com/microsoft/windows-rs"]

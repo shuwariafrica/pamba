@@ -1,0 +1,17 @@
+[package]
+name = "pamba-windows-build"
+description = "What the build script of a program on Pamba's Windows layer calls: the Windows App Runtime staged beside the executable"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories = ["development-tools::build-utils", "os::windows-apis"]
+readme = "../../README.md"
+
+[dependencies]
+windows-reactor-setup.workspace = true
+
+[lints]
+workspace = true
