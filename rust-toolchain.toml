@@ -1,3 +1,5 @@
+# The release the project is verified on, which the manifest's rust-version states too.
 [toolchain]
 channel = "1.100.0"
 components = ["rustfmt", "clippy"]
+profile = "minimal"
