@@ -1,0 +1,43 @@
+[workspace]
+resolver = "3"
+members = ["crates/pamba", "crates/pamba-windows"]
+
+[workspace.package]
+version = "0.4.0"
+edition = "2024"
+rust-version = "1.99"
+license = "Apache-2.0"
+repository = "https://github.com/shuwariafrica/pamba"
+keywords = ["gui", "loop", "effects", "elm", "native"]
+categories = ["gui"]
+
+[workspace.dependencies]
+pamba = { path = "crates/pamba", version = "0.4.0" }
+windows-reactor = "0.100.0"
+
+[workspace.lints.rust]
+future_incompatible = { level = "deny", priority = -1 }
+nonstandard_style = { level = "deny", priority = -1 }
+unused = { level = "deny", priority = -1 }
+unreachable_pub = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+elided_lifetimes_in_paths = "deny"
+trivial_casts = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -1 }
+# A transitive duplicate is the dependency graph's: `cargo tree -d` is read when a dependency is added.
+multiple_crate_versions = "allow"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+exit = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1

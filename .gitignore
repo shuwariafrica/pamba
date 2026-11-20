@@ -1,57 +1,12 @@
-## .NET
-bin/
-obj/
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
-
-## NuGet
-*.nupkg
-*.snupkg
-[Pp]ackages/*
-
-## Build results
-[Dd]ebug/
-[Rr]elease/
-x64/
-x86/
-[Aa][Rr][Mm]/
-[Aa][Rr][Mm]64/
-bld/
-[Bb]in/
-[Oo]bj/
-[Ll]og/
-[Ll]ogs/
-
-## Dotfiles
 .*
-!.gitignore
+!.github/
+!.cargo/
 !.gitattributes
+!.gitignore
 !.editorconfig
 !.rumdl.toml
-!.github
 
-## Visual Studio
-*.rsuser
-*.sln.docstates
-launchSettings.json
-
-## Rider
-*.sln.iml
-
-## Test results
-[Tt]est[Rr]esult*/
-[Bb]uild[Ll]og.*
-*.trx
-*.coverage
-*.coveragexml
-coverage/
-
-## OS
-Thumbs.db
-
-.fake
+target/
 
 *.md
 !README.md
