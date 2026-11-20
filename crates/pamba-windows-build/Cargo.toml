@@ -11,7 +11,7 @@ categories = ["development-tools::build-utils", "os::windows-apis"]
 readme = "../../README.md"
 
 [dependencies]
-windows-reactor-setup.workspace = true
+sha2 = { version = "0.11.1", default-features = false }
 
 [lints]
 workspace = true
