@@ -40,5 +40,5 @@ allow-wildcard-paths = true
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-# `windows-reactor` and its setup crate, at the one commit the workspace's manifest names, until 0.101.0 is released.
+# `windows-reactor` and its setup crate, followed on `master` at the commit `Cargo.lock` names.
 allow-git = ["https://github.com/microsoft/windows-rs"]

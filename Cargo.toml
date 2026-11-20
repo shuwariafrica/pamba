@@ -15,14 +15,15 @@ categories = ["gui"]
 pamba = { path = "crates/pamba", version = "0.4.0" }
 pamba-windows = { path = "crates/pamba-windows", version = "0.4.0" }
 pamba-windows-build = { path = "crates/pamba-windows-build", version = "0.4.0" }
-# A departure with its end. The released `windows-reactor`, 0.100.0, gives a program no key of its own, no pointer
-# shape, no focus on what it draws and no place for its window. Microsoft's `master` gives each, unreleased, so the
-# reactor and its setup crate are named at one commit of it, read and run before it was taken. Pamba is published
-# nowhere while it names a git source. The day 0.101.0 is on crates.io these two lines name it, in the change that
-# removes this source's allowance from `deny.toml`. Moving the commit owes Pamba's cases and `examples/reach` run
-# on a Windows desktop.
-windows-reactor = { git = "https://github.com/microsoft/windows-rs", rev = "63a5e3d9b9afbd57c382d0a4f5a367f134e9dc25", version = "0.101.0" }
-windows-reactor-setup = { git = "https://github.com/microsoft/windows-rs", rev = "63a5e3d9b9afbd57c382d0a4f5a367f134e9dc25", version = "0.100.1" }
+# How Pamba takes its Windows layer. Microsoft publishes `windows-reactor` seldom and builds it daily, and what a
+# program needs of Windows - a key of its own, the pointer's shape, focus on what it draws, its window's place - is
+# on its `master` long before it is in a release. So the reactor and its setup crate are followed on `master`, and
+# `Cargo.lock` names the one commit of it that was read and run, which is what a build takes. The lock is moved
+# forward when Pamba needs something newer, to a commit a week old where one serves; each move runs Pamba's cases
+# and `examples/reach` on a Windows desktop, and its commit says what it was moved for. Pamba is in no registry
+# while it names a git source.
+windows-reactor = { git = "https://github.com/microsoft/windows-rs", branch = "master", version = "0.101.0" }
+windows-reactor-setup = { git = "https://github.com/microsoft/windows-rs", branch = "master", version = "0.100.1" }
 windows-threading = "0.100.0"
 
 [workspace.lints.rust]
