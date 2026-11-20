@@ -8,8 +8,10 @@
 //! It is the proof a move of the reactor's commit owes. On a signed-in Windows desktop, start it
 //! with the path of a log, then run `hand.ps1` with `steps.txt` (both beside this crate's
 //! manifest; the steps name the screen places of a window at 300, 200 on a screen at 100 per
-//! cent scale, and the process to bring to the front). The log then holds each line of
-//! `expected.txt`, in its order.
+//! cent scale, and the process to bring to the front). The log is then `expected-log.txt` line
+//! for line, and what the script read of the pointer, the clipboard and the keyboard's focus is
+//! `expected-answers.txt`. The last two lines of the log are a finger's: it drags the line, and
+//! inside the scroller it is taken by the scroll before the block sees it move.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 

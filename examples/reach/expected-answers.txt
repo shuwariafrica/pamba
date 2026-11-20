@@ -1,0 +1,5 @@
+cursor: west-east
+cursor: arrow
+clipboard: "pamba reach 1"
+focus: "The line" ControlType.Group NamedContainerAutomationPeer
+clipboard: "pamba reach 2"
