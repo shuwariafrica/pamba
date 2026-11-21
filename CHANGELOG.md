@@ -23,7 +23,9 @@ carries over.
   says a word through Windows itself where WinUI could not start. `Window::on_appearance` tells a
   program how Windows draws now, the person's colour mode and her contrast theme, and
   `ui::FillColor` names thirteen colours of Windows' theme that `windows-reactor` does not, each
-  resolved for that appearance by `Appearance::brush`.
+  resolved for that appearance by `Appearance::brush`. `ui::CalendarDay` is a day of the calendar
+  as a program holds one, and `ui::DayPicker` has Windows' date picker hold that day and tell the
+  day a person picks, the same day in whichever time zone the computer is in.
 - `pamba-windows-build`, what the build script of a program on the Windows layer calls, so that
   the program starts on a Windows computer that has no Windows App Runtime installed. It stages
   the runtime beside the executable, with the licence texts of its two packages in `licenses`,
