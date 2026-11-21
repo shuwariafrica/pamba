@@ -1,6 +1,8 @@
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use super::*;
 
@@ -555,6 +557,38 @@ fn the_cache_is_asked_for_under_packages_and_an_earlier_pambas_folder_is_left_as
 
     assert_eq!(tree(&earlier), before, "the earlier folder changed");
     assert_eq!(tools.downloads.get(), 0, "it fetched");
+    assert!(staged.is_ok(), "{staged:?}");
+}
+
+#[test]
+fn a_staging_holds_both_packages_locks_until_its_files_stand_beside_the_executable() {
+    let build = Build::new();
+    build.lay_packages();
+    let folder = lock_file(&build.beside().join(".pamba-windows-build.lock")).unwrap();
+    let vars = build.vars("windows");
+    let packages = build.packages();
+    let held = |package: &Package<'_>| {
+        fs::OpenOptions::new()
+            .write(true)
+            .open(packages.join(format!("{}.lock", package.sha256)))
+            .is_ok_and(|file| matches!(file.try_lock(), Err(fs::TryLockError::WouldBlock)))
+    };
+
+    let (both, staged) = thread::scope(|scope| {
+        let staging = scope.spawn(|| stage(Host::Windows, &vars, &Fake::new(BYTES, MSIX.to_vec())));
+        // The runtime's lock seen held on both sides of the web view's: a staging that held each
+        // in turn has released the runtime's for good before it takes the web view's.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut both = false;
+        while !both && Instant::now() < deadline {
+            both = held(&RUNTIME) && held(&WEBVIEW2) && held(&RUNTIME);
+            thread::sleep(Duration::from_millis(1));
+        }
+        drop(folder);
+        (both, staging.join().unwrap())
+    });
+
+    assert!(both, "the staging never held both packages' locks at once");
     assert!(staged.is_ok(), "{staged:?}");
 }
 

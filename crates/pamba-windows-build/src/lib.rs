@@ -314,23 +314,22 @@ fn stage(
         .join("MSIX")
         .join(format!("win10-{arch}"))
         .join("Microsoft.WindowsAppRuntime.2.msix");
-    let (runtime, msix) = {
-        let _lock = lock(&cache, &RUNTIME)?;
-        cached(&cache, &RUNTIME, &runtime_msix, tools, |runtime| {
-            let msix = msix_unpacked(&RUNTIME, runtime, &runtime_msix, arch, tools)?;
-            Ok((runtime.to_path_buf(), msix))
-        })?
-    };
+    // Both packages' locks are held until the copies beside the executable are made, since
+    // another build that finds a directory lacking a file removes it. Every build takes the
+    // runtime's, then the web view's, then the folder's, so none waits on another in a ring.
+    let runtime_lock = lock(&cache, &RUNTIME)?;
+    let (runtime, msix) = cached(&cache, &RUNTIME, &runtime_msix, tools, |runtime| {
+        let msix = msix_unpacked(&RUNTIME, runtime, &runtime_msix, arch, tools)?;
+        Ok((runtime.to_path_buf(), msix))
+    })?;
     let webview2_core = Path::new("runtimes")
         .join(format!("win-{arch}"))
         .join("native_uap")
         .join(WEBVIEW2_CORE_DLL);
-    let webview2 = {
-        let _lock = lock(&cache, &WEBVIEW2)?;
-        cached(&cache, &WEBVIEW2, &webview2_core, tools, |webview2| {
-            Ok(webview2.to_path_buf())
-        })?
-    };
+    let webview2_lock = lock(&cache, &WEBVIEW2)?;
+    let webview2 = cached(&cache, &WEBVIEW2, &webview2_core, tools, |webview2| {
+        Ok(webview2.to_path_buf())
+    })?;
 
     create_dir_all(&beside)?;
     {
@@ -351,6 +350,7 @@ fn stage(
             }
         }
     }
+    drop((webview2_lock, runtime_lock));
 
     let manifest = out_dir.join("app.manifest");
     fs::write(&manifest, marked(APP_MANIFEST)).map_err(|error| Unstaged::File {
@@ -642,7 +642,8 @@ fn link_args(toolchain: Toolchain, manifest: &Path) -> [String; 2] {
 }
 
 /// Holds the package's lock in the cache, so that of two builds at once one fetches and unpacks
-/// the package and the other finds it.
+/// the package and the other finds it, and neither removes the directory while the other reads
+/// it.
 fn lock(cache: &Path, package: &Package<'_>) -> Result<fs::File, Unstaged> {
     lock_file(&cache.join(format!("{}.lock", package.sha256)))
 }
