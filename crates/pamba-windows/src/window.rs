@@ -1,4 +1,6 @@
-use windows_reactor::{Callback, ColorScheme, View, WindowPlacement, WindowSize, WindowVisuals};
+use windows_reactor::{Callback, View, WindowPlacement, WindowSize, WindowVisuals};
+
+use crate::appearance::Appearance;
 
 /// One window as a program's present state has it: what it holds, and what it says of itself.
 #[derive(Debug)]
@@ -7,7 +9,7 @@ pub struct Window {
     pub(crate) title: Option<String>,
     pub(crate) visuals: Option<WindowVisuals>,
     pub(crate) sized: Option<Callback<WindowSize>>,
-    pub(crate) scheme: Option<Callback<ColorScheme>>,
+    pub(crate) appeared: Option<Callback<Appearance>>,
     pub(crate) placed: Option<Callback<WindowPlacement>>,
 }
 
@@ -19,7 +21,7 @@ impl Window {
             title: None,
             visuals: None,
             sized: None,
-            scheme: None,
+            appeared: None,
             placed: None,
         }
     }
@@ -56,11 +58,12 @@ impl Window {
         self
     }
 
-    /// Tells the program whether the person's colours are light or dark, at the start and
-    /// whenever they change.
+    /// Tells the program how Windows draws now - in the person's light colours, in her dark
+    /// ones, or by her contrast theme - at the start and whenever it changes. A program keeps
+    /// what it is told and resolves a [`FillColor`](crate::ui::FillColor) with it.
     #[must_use]
-    pub fn on_color_scheme(mut self, scheme: Callback<ColorScheme>) -> Self {
-        self.scheme = Some(scheme);
+    pub fn on_appearance(mut self, appeared: Callback<Appearance>) -> Self {
+        self.appeared = Some(appeared);
         self
     }
 }

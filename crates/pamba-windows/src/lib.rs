@@ -16,13 +16,16 @@
 #![cfg(windows)]
 #![deny(unsafe_code)]
 
+mod appearance;
 mod beside;
 mod clipboard;
+mod contrast;
 mod host;
 mod named;
 mod tell;
 mod threads;
 pub mod ui;
+mod watch;
 mod window;
 
 pub use clipboard::{Uncopied, copy};
