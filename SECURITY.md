@@ -14,7 +14,7 @@ from a tag the owner signed, and recorded with its signed checksums and attestat
 pamba's own, whose fingerprint is
 
 ```
-<SIGNING KEY FINGERPRINT>
+7C96D0926D61D7F76544BD010E0E86A8608B7CC5
 ```
 
 pamba is three crates, each released under the same tag: `pamba`, `pamba-windows` and
@@ -44,7 +44,7 @@ keys.openpgp.org publishes it, so a published revocation makes `sqv` refuse:
 ```
 base=https://github.com/shuwariafrica/pamba/releases/download/v<version>
 curl -fsSLO "$base/SHA256SUMS" -fsSLO "$base/SHA256SUMS.asc" \
-  -fsSLo signing.asc https://keys.openpgp.org/vks/v1/by-fingerprint/<SIGNING KEY FINGERPRINT>
+  -fsSLo signing.asc https://keys.openpgp.org/vks/v1/by-fingerprint/7C96D0926D61D7F76544BD010E0E86A8608B7CC5
 gpg --show-keys --with-fingerprint signing.asc   # compare with the fingerprint above
 sqv --keyring signing.asc SHA256SUMS.asc SHA256SUMS && sha256sum -c --ignore-missing SHA256SUMS
 ```
