@@ -1,0 +1,60 @@
+[workspace]
+resolver = "3"
+members = ["crates/pamba", "crates/pamba-windows", "crates/pamba-windows-build", "examples/counter", "examples/reach"]
+
+[workspace.package]
+version = "0.4.0"
+edition = "2024"
+rust-version = "1.100.0"
+license = "Apache-2.0"
+repository = "https://github.com/shuwariafrica/pamba"
+keywords = ["gui", "loop", "effects", "elm", "native"]
+categories = ["gui"]
+
+[workspace.dependencies]
+pamba = { path = "crates/pamba", version = "0.4.0" }
+pamba-windows = { path = "crates/pamba-windows", version = "0.4.0" }
+pamba-windows-build = { path = "crates/pamba-windows-build", version = "0.4.0" }
+# How Pamba takes its Windows layer. Microsoft publishes `windows-reactor` seldom and builds it daily, and what a
+# program needs of Windows - a key of its own, the pointer's shape, focus on what it draws, its window's place - is
+# on its `master` long before it is in a release. So the reactor is followed on `master`, and `Cargo.lock` names the
+# one commit of it that was read and run, which is what a build takes. The lock is moved forward when Pamba needs
+# something newer, to a commit a week old where one serves; each move runs Pamba's cases and `examples/reach` on a
+# Windows desktop, and its commit says what it was moved for. Pamba is in no registry while it names a git source.
+windows-reactor = { git = "https://github.com/microsoft/windows-rs", branch = "master", version = "0.101.0" }
+windows-threading = "0.100.0"
+
+[workspace.lints.rust]
+# Every warning of the compiler's is an error, here and in CI alike.
+warnings = { level = "deny", priority = -1 }
+future_incompatible = { level = "deny", priority = -1 }
+nonstandard_style = { level = "deny", priority = -1 }
+unused = { level = "deny", priority = -1 }
+unreachable_pub = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+elided_lifetimes_in_paths = "deny"
+trivial_casts = "deny"
+
+[workspace.lints.rustdoc]
+all = { level = "deny", priority = -1 }
+
+[workspace.lints.cargo]
+unused_dependencies = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -1 }
+# A transitive duplicate is the dependency graph's: `cargo tree -d` is read when a dependency is added.
+multiple_crate_versions = "allow"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+exit = "deny"
+todo = "deny"
+unimplemented = "deny"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1

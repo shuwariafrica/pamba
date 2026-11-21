@@ -1,0 +1,7 @@
+# A version of a dependency is taken only once it is seven days old, and a resolution with no
+# version that old fails rather than taking a newer one. This file holds these keys alone.
+[registry]
+global-min-publish-age = "7 days"
+
+[resolver]
+incompatible-publish-age = "deny"

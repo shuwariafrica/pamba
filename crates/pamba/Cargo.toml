@@ -1,0 +1,14 @@
+[package]
+name = "pamba"
+description = "The loop a native program runs on: state that answers messages with effects as data, on any platform, testable with no window"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+
+[lints]
+workspace = true

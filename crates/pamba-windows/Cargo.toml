@@ -1,0 +1,23 @@
+[package]
+name = "pamba-windows"
+description = "Pamba's Windows layer: a program drawn with WinUI 3, its effects performed and its loop run on the window's thread"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories = ["gui", "os::windows-apis"]
+readme = "../../README.md"
+
+[target.'cfg(windows)'.dependencies]
+pamba.workspace = true
+windows-reactor.workspace = true
+windows-threading.workspace = true
+
+[package.metadata.docs.rs]
+default-target = "x86_64-pc-windows-msvc"
+targets = []
+
+[lints]
+workspace = true

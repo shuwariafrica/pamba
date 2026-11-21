@@ -1,116 +1,65 @@
-# Contributing
+# Contributing to pamba
 
-## Prerequisites
+Every pull request to `main` runs the checks of
+[`shuwariafrica/public-crates`](https://github.com/shuwariafrica/public-crates), which the
+organisation requires on this repository; it holds no workflow of its own. A first-time
+contributor's run waits until a maintainer approves it.
 
-- .NET 10 SDK
-- C# 14
+## The checks, as you run them
 
-No other toolchains are required. The markdown linter binary is downloaded automatically on first build.
+The toolchain is the one `rust-toolchain.toml` names, which rustup installs. `cargo deny` and
+`cargo semver-checks` are public-crates' versions, held to a digest in its `mise.lock`:
 
-## Build
-
-```shell
-dotnet build pamba.slnx
+```
+git clone https://github.com/shuwariafrica/public-crates
+mise -C public-crates install --locked cargo-deny github:obi1kenobi/cargo-semver-checks
+export PATH="$(mise -C public-crates where cargo-deny):$(mise -C public-crates where github:obi1kenobi/cargo-semver-checks):$PATH"
 ```
 
-This builds all library projects, test projects, and the `Pamba.Root` project which downloads and runs the markdown
-linter.
+Then, in this repository, in the order the checks run them:
 
-## Test
-
-```shell
-dotnet test pamba.slnx
+```
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked
+cargo package --workspace --locked
+cargo deny check
+cargo semver-checks
 ```
 
-## Formatting
+`cargo semver-checks` compares each crate with its last release on crates.io; before a crate's
+first release the checks skip it and say so in the run's summary. While public-crates' `projects.json`
+lists a git source for this project, the checks skip `cargo package`, which resolves from crates.io
+alone, and name the release each source awaits.
 
-Format all C# and Markdown files in one command:
+Before those, the checks refuse a tree:
 
-```shell
-dotnet build Pamba.Root.csproj -t:Format
-```
+- whose toolchain is anything but one exact release, in `rust-toolchain.toml` alone: no
+  `rust-toolchain` file, no `path`, no channel such as `stable`;
+- in which any publishable crate's `rust-version`, or the workspace's, is not that release;
+- whose crates are not all under the one licence `LICENSE` holds;
+- whose `Cargo.lock` takes a package from a git source public-crates' `projects.json` does not list
+  for this project, or at a revision off the first-parent line of the branch it names.
 
-This runs `dotnet format` (C# via `.editorconfig`) followed by `rumdl check --fix` (Markdown via `.rumdl.toml`).
+## Changing what the checks check
 
-Verify no formatting changes remain:
+A pull request fails, by the name of each file, when it changes any of:
 
-```shell
-dotnet format pamba.slnx --verify-no-changes
-dotnet build Pamba.Root.csproj
-```
+- `.cargo/config.toml` or `.cargo/config`;
+- `deny.toml`;
+- `clippy.toml` or `.clippy.toml`;
+- `rustfmt.toml` or `.rustfmt.toml`;
+- `rust-toolchain.toml` or `rust-toolchain`;
+- any file under `.github/`;
+- a manifest's `[lints]` or `[workspace.lints]`, or its `rust-version`.
 
-Markdown is linted by [rumdl](https://github.com/rvben/rumdl). The pinned binary is downloaded automatically to
-`.tools/rumdl/` on first build, and its SHA-256 is verified before it is unpacked. To upgrade, set both
-`RumdlVersion` and `RumdlSha256` in `build/markdown.targets` - the checksum is published beside the release archive
-as a `.sha256` file. A download that does not match is deleted and fails the build.
+A tree may hold any of them; only a change fails. Such a pull request lands only by an
+organisation owner's deliberate merge, which covers the configuration change alone: the checks
+above must still pass.
 
-## Project Structure
-
-| Directory              | Project               | Purpose                                      |
-| ---------------------- | --------------------- | -------------------------------------------- |
-| `pamba-core/`          | `Pamba`               | Core runtime (net10.0, zero UI dependencies) |
-| `pamba-winui/`         | `Pamba.WinUI`         | WinUI 3 shell (net10.0-windows)              |
-| `pamba-testing/`       | `Pamba.Testing`       | Test utilities (net10.0)                     |
-| `pamba-core-tests/`    | `Pamba.Tests`         | Core runtime tests                           |
-| `pamba-winui-tests/`   | `Pamba.WinUI.Tests`   | WinUI shell tests                            |
-| `pamba-testing-tests/` | `Pamba.Testing.Tests` | Test utility tests                           |
-| `build/`               | -                     | Shared MSBuild props and targets             |
-
-## Build Infrastructure
-
-| File                            | Purpose                                                          |
-| ------------------------------- | ---------------------------------------------------------------- |
-| `Directory.Build.props`         | Quality settings enforced across all projects                    |
-| `Directory.Packages.props`      | Centralised NuGet package version management                     |
-| `build/package.props`           | Shared NuGet package metadata (imported by library csproj files) |
-| `build/test.props`              | Shared test project settings (imported by test csproj files)     |
-| `build/markdown.targets`        | rumdl download and lint targets                                  |
-| `Pamba.Root.csproj`             | Root project - builds all projects and runs markdown linting     |
-| `pamba-ci.slnf`                 | CI solution filter (excludes `Pamba.Root.csproj`)                |
-| `.editorconfig`                 | C# style, copyright header, and analyser rules                   |
-| `.rumdl.toml`                   | Markdown lint configuration                                      |
-| `PSScriptAnalyzerSettings.psd1` | PowerShell lint rules, shared by workstation and CI              |
-| `release.ps1`                   | GPG-signed release tag creation and push                         |
-
-## Continuous Integration
-
-| File                          | Purpose                                                                    |
-| ----------------------------- | -------------------------------------------------------------------------- |
-| `.github/workflows/build.yml` | The `ci` workflow: analysis, tests, and the tagged release                 |
-| `.github/mergify.yml`         | Merge queue and labelling, inherited from the organisation's shared config |
-| `.github/renovate.json`       | Dependency updates, inherited from the organisation's shared config        |
-| `.github/release.yml`         | Release-note categories, keyed to the labels Mergify applies               |
-
-Actions are pinned to a commit SHA with the tag in a trailing comment; move both together.
-
-Pull request labels - and therefore release-note categories - come from the commit message.
-Prefix the subject with `[feat]`, `[fix]`, `[task]`, or `[dependencies]`, and add
-`[breaking]` where it applies.
-
-## Code Requirements
-
-Key rules:
-
-- Immutable data types (sealed records, `init` properties)
-- No default parameters - use overloads
-- Explicit access modifiers on all members
-- Errors as values, not exceptions for control flow
-- Total functions - every function returns a valid result for all inputs
-- UK English for identifiers, comments, and documentation
-- ASCII only in all source files unless specific context requires otherwise
-- No `TODO`, `HACK`, or `FIXME` markers in committed code
-
-## Analyser Settings
-
-All projects build with:
-
-- `TreatWarningsAsErrors=true`
-- `AnalysisLevel=latest-all`
-- `EnforceCodeStyleInBuild=true`
-- `Nullable=enable` with nullable warnings as errors
-
-Analyser suppressions require a documented justification in a pragma comment.
-
-## Licence
-
-Apache License 2.0. By contributing, you agree that your contributions will be licensed under the same licence.
+One change passes as data: raising the toolchain. `rust-toolchain.toml` changes its `channel`
+alone, from one exact stable release to a later one, and every publishable crate's
+`rust-version`, and the workspace's, moves to that release in the same pull request. Dependabot's
+toolchain pull request changes the channel only, so it fails until `rust-version` is moved on its
+branch.

@@ -1,0 +1,215 @@
+name: release
+
+# A release of this project, on the owner's signed `v*` tag. `sign`, `record` and `publish` wait
+# on the `release` environment, which the organisation's release gate admits only for a tag it
+# has verified, judging every job they need. Every crate's trusted publisher on crates.io names
+# this file and that environment.
+#
+# Taken from public-crates' template/: 9112863076f4ee8acd1aeee382e18028822e224f stands for the commit
+# of shuwariafrica/.github that holds the crate-* actions, and
+# 9cc50bcd016729cc73e80a8f3106cd656415d451 for public-crates' gate-commit; each is replaced by the
+# commit itself, and moves with it. crate-admit and crate-sign refuse a run whose actions are not at
+# those commits or at a commit .github's actions/third-party.tsv lists. Every artefact is uploaded,
+# downloaded and attested by a step of this file, downloaded by the id its upload returned, and
+# kept 30 days, the window in which "Re-run failed jobs" completes a stopped release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+# One release of the project at a time; a tag pushed while one runs waits, never cancelled.
+concurrency:
+  group: release
+  cancel-in-progress: false
+  queue: max
+
+defaults:
+  run:
+    shell: /usr/bin/env -u GITHUB_ENV -u GITHUB_PATH -u GITHUB_ARTIFACTS /usr/bin/bash --noprofile --norc -euo pipefail -O inherit_errexit {0}
+
+jobs:
+  admit:
+    name: admit
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.admit.outputs.version }}
+      crates: ${{ steps.admit.outputs.crates }}
+      toolchain: ${{ steps.admit.outputs.toolchain }}
+      commit: ${{ steps.admit.outputs.commit }}
+      object: ${{ steps.admit.outputs.object }}
+      signer: ${{ steps.admit.outputs.signer }}
+    steps:
+      - id: admit
+        uses: shuwariafrica/.github/actions/crate-admit@9112863076f4ee8acd1aeee382e18028822e224f
+
+  package:
+    name: package
+    needs: admit
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      digest: ${{ steps.package.outputs.digest }}
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      # A clean checkout of the tag's commit, so each crate's .cargo_vcs_info.json names it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: project
+          persist-credentials: false
+      - id: package
+        uses: shuwariafrica/.github/actions/crate-package@9112863076f4ee8acd1aeee382e18028822e224f
+        with:
+          path: project
+          toolchain: ${{ needs.admit.outputs.toolchain }}
+          version: ${{ needs.admit.outputs.version }}
+          crates: ${{ needs.admit.outputs.crates }}
+      - id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package
+          path: ${{ steps.package.outputs.directory }}
+          if-no-files-found: error
+          retention-days: 30
+
+  # The pull requests' checks, from public-crates at gate-commit, on the tag's commit, with each
+  # packaged crate built unpacked: one job per platform of the project in projects.json, each with
+  # that platform's runner in platforms.json, which crate-admit holds this list to. The project's
+  # code runs here alone, and nothing later takes a file from this job; its failure stops the
+  # release.
+  verify:
+    name: verify ${{ matrix.platform }}
+    needs: [admit, package]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-26.04
+          - platform: windows-x64
+            runner: windows-2025-vs2026
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: project
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.package.outputs.artifact || 'none' }}
+          path: ${{ runner.temp }}/packaged
+      - uses: shuwariafrica/public-crates/.github/actions/checks@9cc50bcd016729cc73e80a8f3106cd656415d451
+        with:
+          project: project
+          platform: ${{ matrix.platform }}
+          packaged: ${{ runner.temp }}/packaged
+
+  sign:
+    name: sign
+    needs: [admit, package, verify]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: read # release.yml at the run's commit, read by crate-sign
+      id-token: write # the federation to the project's own vault, under release's subject
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.package.outputs.artifact || 'none' }}
+          path: ${{ runner.temp }}/release
+      - id: sign
+        uses: shuwariafrica/.github/actions/crate-sign@9112863076f4ee8acd1aeee382e18028822e224f
+        with:
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          client-id: ${{ vars.CRATE_SIGNING_CLIENT_ID }}
+          vault-url: ${{ vars.CRATE_SIGNING_VAULT_URL }}
+          directory: ${{ runner.temp }}/release
+          digest: ${{ needs.package.outputs.digest }}
+      - id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signature
+          path: ${{ steps.sign.outputs.signature }}
+          if-no-files-found: error
+          retention-days: 30
+
+  record:
+    name: record
+    needs: [admit, package, sign]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: write # the release v<version>
+      id-token: write # attest's signing of each .crate's attestation
+      attestations: write # each .crate's attestation, stored
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.package.outputs.artifact || 'none' }}
+          path: ${{ runner.temp }}/release
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.sign.outputs.artifact || 'none' }}
+          path: ${{ runner.temp }}/release
+      - uses: shuwariafrica/.github/actions/crate-record@9112863076f4ee8acd1aeee382e18028822e224f
+        with:
+          step: prepare
+          directory: ${{ runner.temp }}/release
+          digest: ${{ needs.package.outputs.digest }}
+          version: ${{ needs.admit.outputs.version }}
+          crates: ${{ needs.admit.outputs.crates }}
+          object: ${{ needs.admit.outputs.object }}
+          commit: ${{ needs.admit.outputs.commit }}
+          signer: ${{ needs.admit.outputs.signer }}
+      - id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: ${{ runner.temp }}/crate-record/subjects
+          predicate-type: https://shuwari.africa/attestations/crate-release/v1
+          predicate-path: ${{ runner.temp }}/crate-record/predicate.json
+      - uses: shuwariafrica/.github/actions/crate-record@9112863076f4ee8acd1aeee382e18028822e224f
+        with:
+          step: make
+          directory: ${{ runner.temp }}/release
+          digest: ${{ needs.package.outputs.digest }}
+          version: ${{ needs.admit.outputs.version }}
+          crates: ${{ needs.admit.outputs.crates }}
+          bundle: ${{ steps.attest.outputs.bundle-path }}
+
+  publish:
+    name: publish
+    needs: [admit, package, sign, record]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    environment: release
+    permissions:
+      id-token: write # the OIDC token crates.io's trusted publishing exchanges, once
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.package.outputs.artifact || 'none' }}
+          path: ${{ runner.temp }}/release
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.sign.outputs.artifact || 'none' }}
+          path: ${{ runner.temp }}/release
+      - uses: shuwariafrica/.github/actions/crate-publish@9112863076f4ee8acd1aeee382e18028822e224f
+        with:
+          directory: ${{ runner.temp }}/release
+          digest: ${{ needs.package.outputs.digest }}
+          version: ${{ needs.admit.outputs.version }}
+          crates: ${{ needs.admit.outputs.crates }}

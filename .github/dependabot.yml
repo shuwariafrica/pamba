@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # A new release of Rust is raised when it appears; rust-version in Cargo.toml moves with it in
+  # the same pull request, by hand.
+  - package-ecosystem: rust-toolchain
+    directory: /
+    schedule:
+      interval: daily
+    labels: [dependencies]
+  # Seven days, as cargo's own min-publish-age in .cargo/config.toml, which Dependabot's update
+  # does not read.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels: [dependencies]
