@@ -25,6 +25,8 @@ carries over.
   `Window::on_appearance` tells a program how Windows draws now, the person's colour mode and her
   contrast theme, and `ui::FillColor` names thirteen colours of Windows' theme that
   `windows-reactor` does not, each resolved for that appearance by `Appearance::brush`.
+  `Appearance::accent` gives the accent as the ground of a filled mark together with the words that
+  stand on it, which under a contrast theme are the theme's own pair for what is selected.
   `ui::CalendarDay` is a day of the calendar as a program holds one, and `ui::DayPicker` has
   Windows' date picker hold that day and tell the day a person picks, the same day in whichever
   time zone the computer is in.

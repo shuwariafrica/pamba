@@ -16,6 +16,10 @@ use windows_reactor::Color;
 pub struct Contrast {
     /// The theme's colour for words that are not active.
     pub inactive: Color,
+    /// The theme's colour beneath what is selected.
+    pub selected: Color,
+    /// The theme's colour for the words of what is selected.
+    pub selected_words: Color,
 }
 
 /// Windows' question for how the contrast theme stands (`SPI_GETHIGHCONTRAST`).
@@ -24,6 +28,10 @@ const HOW_CONTRAST_STANDS: u32 = 66;
 const ON: u32 = 1;
 /// Windows' index for the colour of words that are not active (`COLOR_GRAYTEXT`).
 const INACTIVE_WORDS: i32 = 17;
+/// Windows' index for the colour beneath what is selected (`COLOR_HIGHLIGHT`).
+const SELECTED: i32 = 13;
+/// Windows' index for the colour of the words of what is selected (`COLOR_HIGHLIGHTTEXT`).
+const SELECTED_WORDS: i32 = 14;
 
 /// What Windows fills in when asked how the contrast theme stands (`HIGHCONTRASTW`).
 #[repr(C)]
@@ -57,12 +65,19 @@ pub(crate) fn read() -> Option<Contrast> {
     if answered == 0 || standing.flags & ON == 0 {
         return None;
     }
+    Some(Contrast {
+        inactive: colour(INACTIVE_WORDS),
+        selected: colour(SELECTED),
+        selected_words: colour(SELECTED_WORDS),
+    })
+}
+
+/// The colour Windows holds at `index` of its own colours.
+fn colour(index: i32) -> Color {
     // SAFETY: `GetSysColor` takes an index and returns a colour; it reads and writes no memory
     // of this program's.
-    let inactive = unsafe { GetSysColor(INACTIVE_WORDS) };
+    let stated = unsafe { GetSysColor(index) };
     // Windows states a colour as red in its lowest byte, then green, then blue.
-    let [red, green, blue, _] = inactive.to_le_bytes();
-    Some(Contrast {
-        inactive: Color::rgb(red, green, blue),
-    })
+    let [red, green, blue, _] = stated.to_le_bytes();
+    Color::rgb(red, green, blue)
 }

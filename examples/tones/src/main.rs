@@ -2,7 +2,9 @@
 //!
 //! Every member of `FillColor` stands in a row of its own: its name, then the colour as words, as
 //! an edge and as a ground, on the window's own ground, resolved for the appearance the window
-//! was last told. Until an appearance is told nothing is drawn but a line that says so.
+//! was last told. Beneath them stands the accent as the ground of a filled mark, with a word on
+//! it in the words that go with that ground. Until an appearance is told nothing is drawn but a
+//! line that says so.
 //! Every appearance the program is told is appended, a line each, to the file its first argument
 //! names, so a run under each colour mode and each contrast theme shows what the program was
 //! told and when.
@@ -29,8 +31,8 @@ mod shown {
 
     use pamba::{Never, Performer, Program, Running, Sender};
     use pamba_windows::ui::{
-        Appearance, Border, FillColor, Orientation, StackPanel, TextBlock, ThemeBrush, Thickness,
-        VerticalAlignment, View, WindowPlacement, WindowVisuals,
+        Appearance, Border, FillColor, HorizontalAlignment, Orientation, StackPanel, TextBlock,
+        ThemeBrush, Thickness, VerticalAlignment, View, WindowPlacement, WindowVisuals,
     };
     use pamba_windows::{Fault, Messages, Window};
 
@@ -126,15 +128,44 @@ mod shown {
             .into()
     }
 
+    /// The accent as a filled mark that holds a word, as `Appearance::accent` gives the two.
+    fn accent(appearance: Appearance) -> View {
+        let (width, height) = SAMPLE;
+        let accent = appearance.accent();
+        StackPanel::new()
+            .orientation(Orientation::Horizontal)
+            .spacing(16.0)
+            .children((
+                TextBlock::new()
+                    .text("Accent, as a fill with its words")
+                    .width(NAME)
+                    .vertical_alignment(VerticalAlignment::Center),
+                Border::new()
+                    .width(width)
+                    .height(height)
+                    .background(accent.fill)
+                    .content(
+                        TextBlock::new()
+                            .text("Words")
+                            .foreground(accent.words)
+                            .horizontal_alignment(HorizontalAlignment::Center)
+                            .vertical_alignment(VerticalAlignment::Center),
+                    ),
+            ))
+            .into()
+    }
+
     fn view(tones: &Tones, messages: &Messages<Message>) -> Window {
         let content: View = match tones.appearance {
             None => TextBlock::new()
                 .text("Not yet told how Windows draws")
                 .into(),
-            Some(appearance) => StackPanel::new()
-                .spacing(8.0)
-                .children(FillColor::ALL.map(|colour| row(appearance, colour)))
-                .into(),
+            Some(appearance) => {
+                let mut rows: Vec<View> =
+                    FillColor::ALL.map(|colour| row(appearance, colour)).into();
+                rows.push(accent(appearance));
+                StackPanel::new().spacing(8.0).children(rows).into()
+            }
         };
         let content = Border::new()
             .background(ThemeBrush::SolidBackground)
@@ -146,7 +177,7 @@ mod shown {
                 x: 100,
                 y: 100,
                 width: 760,
-                height: 620,
+                height: 660,
                 maximized: false,
             }))
             .on_appearance(messages.callback(Message::Appeared))
