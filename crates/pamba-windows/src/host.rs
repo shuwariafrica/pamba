@@ -14,6 +14,7 @@ use windows_reactor::{
 use crate::beside;
 use crate::named;
 use crate::threads::Threads;
+use crate::watch;
 use crate::window::Window;
 
 /// How many queued messages one turn takes before the window is drawn and its own events are
@@ -169,6 +170,7 @@ where
             beside::stands(&window);
             Event::Opened
         });
+        watch::stands();
         Self {
             running,
             view: parts.view,
@@ -212,8 +214,12 @@ where
         if let Some(sized) = window.sized {
             context.on_window_size(sized);
         }
-        if let Some(scheme) = window.scheme {
-            context.on_color_scheme(scheme);
+        // The reactor reports the colour mode alone, so the mode goes to the watch, which reads
+        // what else decides how Windows draws and tells the program of the two as one fact.
+        let asks = window.appeared.is_some();
+        watch::asks(window.appeared);
+        if asks {
+            context.on_color_scheme(Callback::new(watch::mode));
         }
         if let Some(placed) = window.placed {
             context.on_window_placement(placed);
@@ -232,6 +238,7 @@ where
 impl<P: Program, W: Performer<P>, V> Drop for Host<P, W, V> {
     fn drop(&mut self) {
         beside::gone();
+        watch::gone();
         named::gone();
         self.threads.end();
     }

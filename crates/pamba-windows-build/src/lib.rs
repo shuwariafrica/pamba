@@ -25,12 +25,20 @@ const RUNTIME: Package<'static> = Package {
     name: "Microsoft.WindowsAppSDK.Runtime",
     version: "2.6.4",
     sha256: "3e6d1230df782973d09174cf874c947ee5fbbbe77198c52750771f71a085aa0c",
+    texts: &["license.txt", "NOTICE.txt"],
 };
+// The package's own `NOTICE.txt` covers a code generator that is not staged.
 const WEBVIEW2: Package<'static> = Package {
     name: "Microsoft.Web.WebView2",
     version: "1.0.4078.44",
     sha256: "dc4d1d9168df26b830398303e50210b6e1729f6ce5a7ac69d2c766852f489962",
+    texts: &["LICENSE.txt"],
 };
+// NuGet's package content address. NuGet asks a client to read it from the service index rather
+// than hold it; it is held here because reading it would give a build script a second fetch and a
+// parser for one string, the bytes are held to a digest whichever host serves them, and an
+// address that has moved fails the build with the address in its words.
+const PACKAGE_CONTENT: &str = "https://api.nuget.org/v3-flatcontainer";
 const RUNTIME_FILES: &str = include_str!("../assets/runtime.txt");
 const APP_MANIFEST: &str = include_str!("../assets/app.manifest");
 // `windows-reactor` looks for this text in the executable's manifest to load the runtime from
@@ -44,12 +52,15 @@ const MSIX_FILES: [&str; 2] = ["Microsoft.WindowsAppRuntime.dll", "Microsoft.ui.
 /// load it from there, so the program starts on a Windows computer that has no Windows App Runtime
 /// installed.
 ///
+/// The licence texts of both packages are staged in `licenses` beside the executable, and
+/// Microsoft's terms govern the files staged.
+///
 /// Each of the runtime's two packages is downloaded from nuget.org and unpacked only where the
 /// SHA-256 of the whole download is the one this version of Pamba holds, which defends the build
 /// against the network and against the publisher replacing a package. What has been unpacked is
-/// kept in `%LOCALAPPDATA%\pamba\windows-app-runtime\`, one directory named by each digest, and
-/// a later build takes it from there without downloading: that directory is trusted as the
-/// building person's own.
+/// kept in `%LOCALAPPDATA%\pamba\packages\`, one directory named by each digest, and a later
+/// build takes it from there without downloading: that directory is trusted as the building
+/// person's own, and one found lacking a file the staging needs is filled again, once.
 ///
 /// The folder beside the executable is found from `OUT_DIR`, the one place Cargo names to a build
 /// script. A build whose `build.build-dir` is set apart from its target directory therefore has
@@ -99,14 +110,15 @@ struct Package<'a> {
     version: &'a str,
     /// In lower-case hexadecimal.
     sha256: &'a str,
+    /// The licence texts at the package's root that travel with its files.
+    texts: &'a [&'a str],
 }
 
 impl Package<'_> {
     fn address(&self) -> String {
-        format!(
-            "https://www.nuget.org/api/v2/package/{}/{}",
-            self.name, self.version
-        )
+        let id = self.name.to_lowercase();
+        let version = self.version.to_lowercase();
+        format!("{PACKAGE_CONTENT}/{id}/{version}/{id}.{version}.nupkg")
     }
 }
 
@@ -116,21 +128,13 @@ impl fmt::Display for Package<'_> {
     }
 }
 
-/// How many leading components of each entry an unpacking drops.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Strip {
-    None,
-    /// A `.nupkg`'s first, so its `tools\MSIX\...` stands as `MSIX\...`.
-    First,
-}
-
 /// The two acts of the staging that reach outside the build: Windows' own `curl.exe` and
 /// `tar.exe` in a build, and a stand-in in the cases.
 trait Tools {
     /// Writes the bytes at the package's address to the file `to`.
     fn download(&self, package: &Package<'_>, to: &Path) -> Result<(), Unstaged>;
     /// Unpacks the zip archive `archive` into the existing directory `into`.
-    fn unpack(&self, archive: &Path, into: &Path, strip: Strip) -> Result<(), Unstaged>;
+    fn unpack(&self, archive: &Path, into: &Path) -> Result<(), Unstaged>;
 }
 
 /// Why the runtime was not staged.
@@ -303,24 +307,29 @@ fn stage(
         beside_executable(&out_dir).ok_or_else(|| Unstaged::OutDirForm(out_dir.clone()))?;
     let cache = PathBuf::from(vars("LOCALAPPDATA").ok_or(Unstaged::NoVariable("LOCALAPPDATA"))?)
         .join("pamba")
-        .join("windows-app-runtime");
+        .join("packages");
     create_dir_all(&cache)?;
 
-    let runtime_msix = Path::new("MSIX")
+    let runtime_msix = Path::new("tools")
+        .join("MSIX")
         .join(format!("win10-{arch}"))
         .join("Microsoft.WindowsAppRuntime.2.msix");
-    let msix = {
-        let _lock = lock(&cache, &RUNTIME)?;
-        let runtime = unpacked(&cache, &RUNTIME, &runtime_msix, tools)?;
-        msix_unpacked(&runtime, &runtime_msix, arch, tools)?
-    };
-    let webview2_core = Path::new(&format!("win-{arch}"))
+    // Both packages' locks are held until the copies beside the executable are made, since
+    // another build that finds a directory lacking a file removes it. Every build takes the
+    // runtime's, then the web view's, then the folder's, so none waits on another in a ring.
+    let runtime_lock = lock(&cache, &RUNTIME)?;
+    let (runtime, msix) = cached(&cache, &RUNTIME, &runtime_msix, tools, |runtime| {
+        let msix = msix_unpacked(&RUNTIME, runtime, &runtime_msix, arch, tools)?;
+        Ok((runtime.to_path_buf(), msix))
+    })?;
+    let webview2_core = Path::new("runtimes")
+        .join(format!("win-{arch}"))
         .join("native_uap")
         .join(WEBVIEW2_CORE_DLL);
-    let webview2 = {
-        let _lock = lock(&cache, &WEBVIEW2)?;
-        unpacked(&cache, &WEBVIEW2, &webview2_core, tools)?
-    };
+    let webview2_lock = lock(&cache, &WEBVIEW2)?;
+    let webview2 = cached(&cache, &WEBVIEW2, &webview2_core, tools, |webview2| {
+        Ok(webview2.to_path_buf())
+    })?;
 
     create_dir_all(&beside)?;
     {
@@ -330,7 +339,18 @@ fn stage(
             &webview2.join(&webview2_core),
             &beside.join(WEBVIEW2_CORE_DLL),
         )?;
+        let licenses = beside.join("licenses");
+        create_dir_all(&licenses)?;
+        for (package, dir) in [(&RUNTIME, &runtime), (&WEBVIEW2, &webview2)] {
+            for text in package.texts {
+                copy_entry(
+                    &dir.join(text),
+                    &licenses.join(format!("{}.{text}", package.name)),
+                )?;
+            }
+        }
     }
+    drop((webview2_lock, runtime_lock));
 
     let manifest = out_dir.join("app.manifest");
     fs::write(&manifest, marked(APP_MANIFEST)).map_err(|error| Unstaged::File {
@@ -374,30 +394,47 @@ fn beside_executable(out_dir: &Path) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
-/// The directory named by the package's digest, holding the whole of its `.nupkg` unpacked: found
-/// where it stands, otherwise downloaded, verified and unpacked. The caller holds the package's
-/// lock.
-fn unpacked(
+/// What `take` finds in the directory named by the package's digest, which holds the whole of its
+/// `.nupkg` unpacked: found where it stands, otherwise downloaded, verified and unpacked. A
+/// directory that stands but lacks a file the staging needs, the file `needed`, a licence text or
+/// one `take` looks for inside it, was damaged: it is removed whole and filled again, once. The
+/// caller holds the package's lock.
+fn cached<T>(
     cache: &Path,
     package: &Package<'_>,
     needed: &Path,
     tools: &impl Tools,
-) -> Result<PathBuf, Unstaged> {
+    take: impl Fn(&Path) -> Result<T, Unstaged>,
+) -> Result<T, Unstaged> {
     let dir = cache.join(package.sha256);
-    if !is_dir(&dir)? {
-        let downloads = format!("{}.nupkg-", package.sha256);
-        remove_left(cache, &downloads)?;
-        let download = cache.join(format!("{downloads}{}", process::id()));
-        verified(package, &download, tools)?;
-        let whole = whole(cache, package.sha256, |partial| {
-            tools.unpack(&download, partial, Strip::First)?;
-            require(package, partial, needed)
-        });
-        discard(&download)?;
-        whole?;
+    if is_dir(&dir)? {
+        match require_package(package, &dir, needed).and_then(|()| take(&dir)) {
+            Err(Unstaged::MissingFile { .. }) => {
+                fs::remove_dir_all(&dir).map_err(|error| file_error("remove", &dir, error))?;
+            }
+            found => return found,
+        }
     }
-    require(package, &dir, needed)?;
-    Ok(dir)
+    let downloads = format!("{}.nupkg-", package.sha256);
+    remove_left(cache, &downloads)?;
+    let download = cache.join(format!("{downloads}{}", process::id()));
+    verified(package, &download, tools)?;
+    let whole = whole(cache, package.sha256, |partial| {
+        tools.unpack(&download, partial)?;
+        require_package(package, partial, needed)
+    });
+    discard(&download)?;
+    whole?;
+    take(&dir)
+}
+
+/// Requires the file `needed` and each of the package's licence texts in the unpacked package.
+fn require_package(package: &Package<'_>, dir: &Path, needed: &Path) -> Result<(), Unstaged> {
+    require(package, dir, needed)?;
+    package
+        .texts
+        .iter()
+        .try_for_each(|text| require(package, dir, Path::new(text)))
 }
 
 /// Downloads the package to the file `to`, and leaves the file there only where its bytes are
@@ -429,6 +466,7 @@ fn verified(package: &Package<'_>, to: &Path, tools: &impl Tools) -> Result<(), 
 /// The runtime's inner `.msix` for the architecture, unpacked into `<sha256>\.msix-<arch>\`. The
 /// caller holds the runtime's lock.
 fn msix_unpacked(
+    package: &Package<'_>,
     runtime: &Path,
     msix: &Path,
     arch: &str,
@@ -439,11 +477,11 @@ fn msix_unpacked(
     let require_all = |dir: &Path| {
         MSIX_FILES
             .iter()
-            .try_for_each(|file| require(&RUNTIME, dir, Path::new(file)))
+            .try_for_each(|file| require(package, dir, Path::new(file)))
     };
     if !is_dir(&dir)? {
         whole(runtime, &name, |partial| {
-            tools.unpack(&runtime.join(msix), partial, Strip::None)?;
+            tools.unpack(&runtime.join(msix), partial)?;
             require_all(partial)
         })?;
     }
@@ -604,7 +642,8 @@ fn link_args(toolchain: Toolchain, manifest: &Path) -> [String; 2] {
 }
 
 /// Holds the package's lock in the cache, so that of two builds at once one fetches and unpacks
-/// the package and the other finds it.
+/// the package and the other finds it, and neither removes the directory while the other reads
+/// it.
 fn lock(cache: &Path, package: &Package<'_>) -> Result<fs::File, Unstaged> {
     lock_file(&cache.join(format!("{}.lock", package.sha256)))
 }
@@ -698,14 +737,16 @@ impl Tools for System {
         }
     }
 
-    fn unpack(&self, archive: &Path, into: &Path, strip: Strip) -> Result<(), Unstaged> {
+    fn unpack(&self, archive: &Path, into: &Path) -> Result<(), Unstaged> {
         let tar = Self::tool("tar.exe")?;
-        let mut command = Command::new(&tar);
-        command.arg("-xf").arg(archive).arg("-C").arg(into);
-        if strip == Strip::First {
-            command.arg("--strip-components=1");
-        }
-        let output = Self::run(&tar, &mut command)?;
+        let output = Self::run(
+            &tar,
+            Command::new(&tar)
+                .arg("-xf")
+                .arg(archive)
+                .arg("-C")
+                .arg(into),
+        )?;
         if output.status.success() {
             Ok(())
         } else {
