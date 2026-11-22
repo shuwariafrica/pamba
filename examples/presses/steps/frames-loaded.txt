@@ -1,0 +1,19 @@
+wait 1500
+front presses
+wait 600
+focus
+find Press
+find Arm a freeze
+find Arm a removal
+find Arm a disabling
+find Bring the press back
+find Twenty drawings
+load 25
+wait 4000
+loaded
+mark B3 twenty drawings, loaded
+click Twenty drawings
+wait 8000
+loaded
+unload
+wait 1500

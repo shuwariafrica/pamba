@@ -1,0 +1,61 @@
+wait 1500
+front presses
+wait 600
+focus
+find Press
+find Arm a freeze
+find Arm a removal
+find Arm a disabling
+find Bring the press back
+find Twenty drawings
+mark B1 mouse
+click Press
+wait 800
+focus
+mark B1 B2 two mouse presses a second apart in a freeze
+click Arm a freeze
+wait 500
+click Press
+wait 300
+click Press
+wait 1000
+click Press
+wait 3000
+focus
+mark B5 two mouse presses 100 ms apart
+twice Press 100
+wait 1500
+focus
+mark B5 two mouse presses 700 ms apart
+twice Press 700
+wait 1500
+focus
+mark B7 the press removed in a freeze
+click Arm a removal
+wait 500
+click Press
+wait 1000
+click Press
+wait 3000
+focus
+click Bring the press back
+wait 800
+mark B7 the press disabled in a freeze
+click Arm a disabling
+wait 500
+click Press
+wait 1000
+click Press
+wait 3000
+focus
+click Bring the press back
+wait 800
+mark B5 the double-click time changed
+click-time 900
+twice Press 700
+wait 1500
+focus
+click-time 500
+twice Press 700
+wait 1500
+focus

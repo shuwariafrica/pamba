@@ -1,0 +1,34 @@
+wait 1500
+front presses
+wait 600
+focus
+find Press
+find Arm a freeze
+find Arm a removal
+find Arm a disabling
+find Bring the press back
+find Twenty drawings
+mark B1 B6 a finger's tap
+tap Press
+wait 1000
+focus
+mark B5 two taps 100 ms apart
+tap Press
+wait 100
+tap Press
+wait 1500
+focus
+mark B5 two taps 700 ms apart
+tap Press
+wait 700
+tap Press
+wait 1500
+focus
+mark B1 B6 a pen's tap
+pen Press
+wait 1000
+focus
+mark B1 B6 UI Automation's Invoke
+invoke Press
+wait 1000
+focus
