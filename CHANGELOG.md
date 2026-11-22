@@ -14,7 +14,8 @@ carries over.
   effects as data; a `Performer` carries them out on one platform; a `Loop` runs the two on the
   thread that draws. `Manual` runs a program and its performer in a test with no window and no
   second thread. `Places` keeps, for a platform's layer, the places a program names from one
-  drawing to the next, and retries an ask the platform cannot carry out yet.
+  drawing to the next, and retries an ask the platform cannot carry out yet. `Sender::wrapping`
+  gives a part of a program a sender for its own messages, made from the whole's by a function.
 - `pamba-windows`, the Windows layer. `run` opens a program's window, drawn with WinUI 3 through
   Microsoft's `windows-reactor`, whose controls are all under `ui`. `Messages` turns what a control
   reports into a message of the program's, and `Messages::routed` lets a program take a key or a
