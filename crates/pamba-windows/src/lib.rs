@@ -7,7 +7,9 @@
 //! What arrives in answer stands in a place the drawing gives with `place`: `bring_into_view`
 //! scrolls it into sight, and `announce` says the answer to a screen reader.
 //! What WinUI's reactor does not reach, Windows itself gives beside it: `copy` puts text on the
-//! clipboard. Where WinUI itself cannot start, so that no window of the program can say so,
+//! clipboard. Other threads ask work of the window's thread through `WindowThread`, which runs it
+//! there with the window's `WindowHandle`: `bring_forward` brings the window in front of the
+//! others. Where WinUI itself cannot start, so that no window of the program can say so,
 //! `tell` says it through Windows. Microsoft's
 //! `windows-reactor` draws beneath this crate, and a program names this crate alone: a fault of
 //! the layer beneath is mended here, once, for every program.
@@ -32,11 +34,14 @@ mod threads;
 pub mod ui;
 mod watch;
 mod window;
+mod window_thread;
 mod xaml;
 
 pub use arrive::{announce, bring_into_view, place};
+pub use beside::{Behind, WindowHandle};
 pub use clipboard::{Uncopied, copy};
 pub use host::{Fault, Messages, run};
 pub use named::{focus, named};
 pub use tell::tell;
 pub use window::Window;
+pub use window_thread::{Unrun, WindowThread};

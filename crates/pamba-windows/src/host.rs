@@ -5,22 +5,24 @@ use std::num::NonZeroUsize;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use pamba::{Loop, Performer, Program};
+use pamba::{Dispatcher, Loop, Performer, Program};
 use windows_reactor::{
     App, Border, Callback, Component, ComponentContext, ComponentTimer, FocusEventInfo,
     LocalSender, RoutedCallback, View, ViewContext,
 };
 
 use crate::arrive;
-use crate::beside;
+use crate::beside::{self, WindowHandle};
 use crate::fill::{self, Checked};
 use crate::named;
 use crate::threads::Threads;
 use crate::watch;
 use crate::window::Window;
+use crate::window_thread;
 
-/// How many queued messages one turn takes before the window is drawn and its own events are
-/// seen to: a burst beyond it is taken over several turns.
+/// How many queued messages one turn takes, and how many pieces of work asked of the window's
+/// thread one hand-over runs, before the window is drawn and its own events are seen to: a burst
+/// beyond it is taken over several.
 const TURN: NonZeroUsize = match NonZeroUsize::new(64) {
     Some(turn) => turn,
     None => unreachable!(),
@@ -102,6 +104,8 @@ pub(crate) enum Event<M> {
     Paused,
     /// The window's content is to be checked against the window.
     Check,
+    /// A hand-over of work asked of the window's thread has run.
+    Ran,
 }
 
 struct Parts<P: Program, W, V> {
@@ -158,6 +162,28 @@ where
             Event::Woken
         });
     }
+
+    /// Where work is asked of the window's thread and no hand-over waits already, queues one with
+    /// the reactor, which runs a turn's worth of that work with the window's handle, in the order
+    /// asked.
+    fn hand(context: &ComponentContext<'_, Self>) {
+        let Some(owed) = window_thread::owed() else {
+            return;
+        };
+        // The reactor drops what it refuses, and what waits when the window goes. Either way the
+        // work stays kept: the next wake offers it again, and the window's going drops it unrun.
+        let _ = context.run_window(move |window| {
+            let handle = WindowHandle::new(window.as_raw());
+            owed.hand(TURN, |work| {
+                // Work run before this in the hand-over may have closed the window. Work is
+                // handed no handle Windows no longer knows as a window's: it is dropped unrun.
+                if handle.is_window() {
+                    work(handle);
+                }
+            });
+            Event::Ran
+        });
+    }
 }
 
 impl<P, W, V> Component for Host<P, W, V>
@@ -191,6 +217,10 @@ where
             beside::stands(&window);
             Event::Opened
         });
+        // After the handle is kept: work asked before the window stood runs after it, in order.
+        let waking = Arc::clone(&threads);
+        window_thread::stands(move || waking.wake());
+        Self::hand(context);
         watch::stands();
         Self {
             running,
@@ -207,6 +237,7 @@ where
         match message {
             Event::Did(message) => self.running.step(message),
             Event::Woken => {
+                Self::hand(context);
                 self.running.turn(TURN);
                 Self::wait(&self.threads, context);
             }
@@ -222,6 +253,8 @@ where
                     Checked::Stands | Checked::Left => None,
                 };
             }
+            // More may wait: a burst beyond one hand-over, or work asked from inside work.
+            Event::Ran => Self::hand(context),
             // One ask is retried at a time: a pause still running is for an ask since replaced.
             Event::Pause => {
                 self.pause = Some(context.set_timeout(named::PAUSE, Event::Paused));
@@ -285,6 +318,7 @@ impl<P: Program, W: Performer<P>, V> Drop for Host<P, W, V> {
         watch::gone();
         named::gone();
         arrive::gone();
+        window_thread::gone();
         self.threads.end();
     }
 }
@@ -311,8 +345,12 @@ where
         performer,
         view,
     }))));
-    App::run_component::<Host<P, W, V>>(seed).map_err(|error| Fault {
-        code: error.code().0,
-        message: error.message(),
+    App::run_component::<Host<P, W, V>>(seed).map_err(|error| {
+        // Where WinUI could not start, no window stood to end what was asked of it.
+        window_thread::gone();
+        Fault {
+            code: error.code().0,
+            message: error.message(),
+        }
     })
 }

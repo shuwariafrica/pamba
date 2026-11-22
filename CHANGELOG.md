@@ -23,8 +23,15 @@ carries over.
   reports into a message of the program's, and `Messages::routed` lets a program take a key or a
   pointer for itself. `named` gives a control a name of the program's, and `focus` stands the
   keyboard at it once the drawing after the step stands, asking again for a control Windows shows a
-  moment later, such as a field in an expander the person has just opened. `copy` puts text on the
-  clipboard. `tell` says a word through Windows itself where WinUI could not start.
+  moment later, such as a field in an expander the person has just opened. `place` gives part of
+  the drawing a name of the program's as the place where an answer arrives: `bring_into_view`
+  moves every scrolling area it stands in as little as shows it, once the drawing after the step
+  stands, and `announce` says words to a screen reader without moving the keyboard. `copy` puts
+  text on the clipboard. `WindowThread` lets any thread ask work of the window's thread, which runs
+  it there with the window's `WindowHandle` once the window stands, and refuses with `Unrun` once
+  the window has gone. `WindowHandle::bring_forward` restores the window where it was minimised and
+  asks Windows for the foreground, and answers `Behind` where Windows keeps it behind. `tell` says a
+  word through Windows itself where WinUI could not start.
   `Window::on_appearance` tells a program how Windows draws now, the person's colour mode and her
   contrast theme, and `ui::FillColor` names thirteen colours of Windows' theme that
   `windows-reactor` does not, each resolved for that appearance by `Appearance::brush`.

@@ -1,0 +1,15 @@
+state forward: restored at 300 200 1000 500
+state forward: minimised
+allow forward: True
+state forward: restored at 300 200 1000 500
+foreground forward: True
+state forward: minimised
+foreground charmap: True
+state forward: restored at 300 200 1000 500
+foreground forward: True
+foreground charmap: False
+state forward: restored at 300 200 1000 500
+foreground charmap: True
+state forward: restored at 300 200 1000 500
+foreground forward: False
+foreground charmap: True

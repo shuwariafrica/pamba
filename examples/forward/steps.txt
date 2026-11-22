@@ -1,0 +1,38 @@
+front forward
+press Ask three
+wait 1500
+press Ask a burst
+wait 8000
+state forward
+press Bring forward soon
+minimise forward
+state forward
+allow forward
+wait 7000
+state forward
+foreground forward
+press Bring forward soon
+minimise forward
+open charmap
+keys {TAB}
+state forward
+foreground charmap
+wait 7000
+state forward
+foreground forward
+foreground charmap
+close charmap
+front forward
+press Bring forward soon
+open charmap
+keys {TAB}
+state forward
+foreground charmap
+wait 7000
+state forward
+foreground forward
+foreground charmap
+close charmap
+front forward
+press Close with work kept
+wait 3000
