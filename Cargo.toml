@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/pamba", "crates/pamba-host", "crates/pamba-windows", "crates/pamba-windows-build", "examples/arrive", "examples/counter", "examples/days", "examples/fill", "examples/forward", "examples/keep", "examples/presses", "examples/reach", "examples/switch", "examples/tones", "tools/bind"]
+members = ["crates/pamba", "crates/pamba-host", "crates/pamba-windows", "crates/pamba-windows-build", "examples/arrive", "examples/counter", "examples/days", "examples/fill", "examples/forward", "examples/inside", "examples/keep", "examples/presses", "examples/reach", "examples/switch", "examples/tones", "tools/bind"]
 
 [workspace.package]
 version = "0.4.0"

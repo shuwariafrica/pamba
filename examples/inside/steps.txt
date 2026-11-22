@@ -1,0 +1,25 @@
+wait 1500
+front inside
+wait 600
+focus
+on Ask the day
+wait 1200
+focus
+on Ask the words
+wait 1200
+focus
+on Ask past the disabled
+wait 1200
+focus
+on Ask the field twice
+wait 1200
+focus
+on Ask the shared name
+wait 1200
+focus
+on Open and ask
+wait 1200
+focus
+on Draw and ask
+wait 1200
+focus
