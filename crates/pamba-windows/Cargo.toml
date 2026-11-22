@@ -12,7 +12,9 @@ readme = "../../README.md"
 
 [target.'cfg(windows)'.dependencies]
 pamba.workspace = true
+windows-core.workspace = true
 windows-reactor.workspace = true
+windows-reference.workspace = true
 windows-threading.workspace = true
 
 [package.metadata.docs.rs]

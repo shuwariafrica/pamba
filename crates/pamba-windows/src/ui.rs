@@ -15,4 +15,4 @@ pub use windows_reactor::*;
 
 pub use crate::appearance::{Accent, Appearance, FillColor};
 pub use crate::contrast::Contrast;
-pub use crate::days::{CalendarDay, DayPicker};
+pub use crate::days::{CalendarDay, DayPicker, Days, NoDay, NotOffered};

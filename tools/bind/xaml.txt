@@ -1,0 +1,33 @@
+// What Pamba's Windows layer calls of XAML itself, for what arrives in answer to be brought into view and said. One
+// filter to a line. A member this file does not name is left unbound. A member is named on its class, since one
+// named on an interface that a class alone implements is bound without a method to call it. Every type of another
+// namespace that a named member's signature uses is named too: the generator leaves a member unbound, and says
+// nothing, where one is missing. A member a class does not hold stops the generator with its name.
+
+// The window's root, learnt when a control of it takes the keyboard, and the control that holds the keyboard there.
+Microsoft.UI.Xaml.Input.FocusManager::{add_GotFocus, remove_GotFocus, GetFocusedElementWithRoot}
+Microsoft.UI.Xaml.Input.FocusManagerGotFocusEventArgs::NewFocusedElement
+Microsoft.UI.Xaml.UIElement::get_XamlRoot
+Microsoft.UI.Xaml.XamlRoot::Content
+
+// The walk from the root to a place, by the tag its border holds, and from the place up through what scrolls it.
+Microsoft.UI.Xaml.Media.VisualTreeHelper::{GetChild, GetChildrenCount, GetParent}
+Microsoft.UI.Xaml.Automation.AutomationProperties::GetAutomationId
+
+// A place brought into view: its layout, which a drawing that shows it for the first time has not yet made when
+// the ask is carried out, its size, the viewport of each scrolling area it stands in, and the ask itself.
+Microsoft.UI.Xaml.UIElement::UpdateLayout
+Microsoft.UI.Xaml.FrameworkElement::{ActualWidth, ActualHeight}
+Microsoft.UI.Xaml.Controls.ScrollViewer::{get_ViewportWidth, get_ViewportHeight}
+Microsoft.UI.Xaml.Controls.ScrollView::{ViewportWidth, ViewportHeight}
+Microsoft.UI.Xaml.UIElement::StartBringIntoViewWithOptions
+Microsoft.UI.Xaml.BringIntoViewOptions::{CreateInstance, put_TargetRect}
+
+// Words said to a screen reader, from an element's automation peer.
+Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer::CreatePeerForElement
+Microsoft.UI.Xaml.Automation.Peers.AutomationPeer::RaiseNotificationEvent
+Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationKind::Other
+Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationProcessing::All
+
+// Windows' own: the handler of XAML's static event.
+Windows.Foundation.EventHandler

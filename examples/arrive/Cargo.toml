@@ -1,0 +1,20 @@
+[package]
+name = "arrive"
+description = "What arrives in answer, brought into view and said, shown on a desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# The whole of it is Windows': elsewhere it builds to a program that says so.
+[target.'cfg(windows)'.dependencies]
+pamba.workspace = true
+pamba-windows.workspace = true
+
+[build-dependencies]
+pamba-windows-build.workspace = true
+
+[lints]
+workspace = true

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/pamba", "crates/pamba-windows", "crates/pamba-windows-build", "examples/counter", "examples/days", "examples/reach", "examples/tones"]
+members = ["crates/pamba", "crates/pamba-windows", "crates/pamba-windows-build", "examples/arrive", "examples/counter", "examples/days", "examples/fill", "examples/forward", "examples/reach", "examples/tones", "tools/bind"]
 
 [workspace.package]
 version = "0.4.0"
@@ -22,6 +22,11 @@ pamba-windows-build = { path = "crates/pamba-windows-build", version = "0.4.0" }
 # something newer, to a commit a week old where one serves; each move runs Pamba's cases and `examples/reach` on a
 # Windows desktop, and its commit says what it was moved for. Pamba is in no registry while it names a git source.
 windows-reactor = { git = "https://github.com/microsoft/windows-rs", branch = "master", version = "0.101.0" }
+# What Pamba binds for itself of what the reactor does not reach is written by the generator of that same commit, and
+# names the runtime crates of that same commit, which the reactor takes already.
+windows-bindgen = { git = "https://github.com/microsoft/windows-rs", branch = "master", version = "0.101.0" }
+windows-core = { git = "https://github.com/microsoft/windows-rs", branch = "master", version = "0.101.0" }
+windows-reference = { git = "https://github.com/microsoft/windows-rs", branch = "master", version = "0.101.0" }
 windows-threading = "0.100.0"
 
 [workspace.lints.rust]

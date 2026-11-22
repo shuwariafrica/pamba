@@ -1,0 +1,15 @@
+forward starts
+(a) asked from another thread before run: kept
+(a) work asked before run ran on the thread run was called on: true
+(a) Windows knows its handle as a window of this process: true
+(b) piece 1 ran on the window's thread: true
+(b) piece 2 ran on the window's thread: true
+(b) piece 3 ran on the window's thread: true
+(f) of 20000 pieces asked at once: 20000 ran, 0 were dropped unrun, in the order asked: true
+bring forward 1 answered Ok
+bring forward 2 answered Ok
+bring forward 3 answered Behind (Windows kept the window behind the others)
+(e) the work behind the closing piece was dropped unrun
+(e) the kept work was dropped unrun
+the window has closed
+(e) an ask after the window closed: Err(Unrun)

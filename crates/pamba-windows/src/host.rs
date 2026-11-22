@@ -1,24 +1,30 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::error::Error;
 use std::fmt;
 use std::num::NonZeroUsize;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use pamba::{Loop, Performer, Program};
+use pamba::{Dispatcher, Loop, Performer, Program};
 use windows_reactor::{
-    App, Border, Callback, Component, ComponentContext, ComponentTimer, FocusEventInfo,
-    LocalSender, RoutedCallback, View, ViewContext,
+    App, Border, Callback, Component, ComponentContext, ComponentTimer, CompositionHostEvent,
+    ElementObservation, ElementRef, FocusEventInfo, Grid, LocalSender, RoutedCallback, View,
+    ViewContext,
 };
 
-use crate::beside;
+use crate::arrive;
+use crate::beside::{self, WindowHandle};
+use crate::fill::{self, Checked, LaidOut, Sequence};
 use crate::named;
 use crate::threads::Threads;
+use crate::unfilled::Unfilled;
 use crate::watch;
 use crate::window::Window;
+use crate::window_thread;
 
-/// How many queued messages one turn takes before the window is drawn and its own events are
-/// seen to: a burst beyond it is taken over several turns.
+/// How many queued messages one turn takes, and how many pieces of work asked of the window's
+/// thread one hand-over runs, before the window is drawn and its own events are seen to: a burst
+/// beyond it is taken over several.
 const TURN: NonZeroUsize = match NonZeroUsize::new(64) {
     Some(turn) => turn,
     None => unreachable!(),
@@ -98,6 +104,10 @@ pub(crate) enum Event<M> {
     Pause,
     /// That pause is over.
     Paused,
+    /// The window's content is to be checked against the window.
+    Check,
+    /// A hand-over of work asked of the window's thread has run.
+    Ran,
 }
 
 struct Parts<P: Program, W, V> {
@@ -133,6 +143,18 @@ struct Host<P: Program, W: Performer<P>, V> {
     /// The pause before a refused ask of a named control is made again, while it runs: dropped,
     /// it is cancelled.
     pause: Option<ComponentTimer>,
+    /// The pause before the window's content is next checked, while it runs.
+    fill: Option<ComponentTimer>,
+    /// How far the checking of the window's content has come since the window first stood.
+    checked: Sequence,
+    /// The layer's own element around the program's content, whose laid-out size is observed.
+    laid: ElementRef<Grid>,
+    /// The observation of `laid`, held for the window's life: dropped, it ends.
+    _laying: ElementObservation,
+    /// The last laid-out size the observation gave; none until the first.
+    laid_out: Rc<Cell<Option<LaidOut>>>,
+    /// Told what the checking found, as the latest drawing asks.
+    unfilled: RefCell<Option<Callback<Unfilled>>>,
 }
 
 impl<P, W, V> Host<P, W, V>
@@ -148,6 +170,28 @@ where
         let _ = context.spawn_background(move |_| {
             threads.woken();
             Event::Woken
+        });
+    }
+
+    /// Where work is asked of the window's thread and no hand-over waits already, queues one with
+    /// the reactor, which runs a turn's worth of that work with the window's handle, in the order
+    /// asked.
+    fn hand(context: &ComponentContext<'_, Self>) {
+        let Some(owed) = window_thread::owed() else {
+            return;
+        };
+        // The reactor drops what it refuses, and what waits when the window goes. Either way the
+        // work stays kept: the next wake offers it again, and the window's going drops it unrun.
+        let _ = context.run_window(move |window| {
+            let handle = WindowHandle::new(window.as_raw());
+            owed.hand(TURN, |work| {
+                // Work run before this in the hand-over may have closed the window. Work is
+                // handed no handle Windows no longer knows as a window's: it is dropped unrun.
+                if handle.is_window() {
+                    work(handle);
+                }
+            });
+            Event::Ran
         });
     }
 }
@@ -175,6 +219,7 @@ where
             // Refused only once the window has gone, and its names with it.
             let _ = sender.send(Event::Pause);
         });
+        arrive::stands();
         let running = Loop::start(parts.program, parts.effects, parts.performer, dispatcher);
         Self::wait(&threads, context);
         // What Pamba reaches through Windows beside the reactor is reached for this window.
@@ -182,13 +227,44 @@ where
             beside::stands(&window);
             Event::Opened
         });
+        // After the handle is kept: work asked before the window stood runs after it, in order.
+        let waking = Arc::clone(&threads);
+        window_thread::stands(move || waking.wake());
+        Self::hand(context);
         watch::stands();
+        let laid = ElementRef::<Grid>::new();
+        let laid_out = Rc::new(Cell::new(None));
+        let given = Rc::clone(&laid_out);
+        let laying = laid.observe_composition_host(move |event| {
+            let (CompositionHostEvent::Ready {
+                width,
+                height,
+                scale,
+                ..
+            }
+            | CompositionHostEvent::Metrics {
+                width,
+                height,
+                scale,
+            }) = event;
+            given.set(Some(LaidOut {
+                width,
+                height,
+                scale,
+            }));
+        });
         Self {
             running,
             view: parts.view,
             threads,
             took: Callback::new(|_: FocusEventInfo| named::took()),
             pause: None,
+            fill: None,
+            checked: Sequence::default(),
+            laid,
+            _laying: laying,
+            laid_out,
+            unfilled: RefCell::new(None),
         }
     }
 
@@ -196,10 +272,28 @@ where
         match message {
             Event::Did(message) => self.running.step(message),
             Event::Woken => {
+                Self::hand(context);
                 self.running.turn(TURN);
                 Self::wait(&self.threads, context);
             }
-            Event::Opened => {}
+            Event::Opened => {
+                self.fill = Some(context.set_timeout(fill::FIRST, Event::Check));
+            }
+            Event::Check => {
+                self.fill = match fill::check(&mut self.checked, self.laid_out.get()) {
+                    Checked::Again => Some(context.set_timeout(fill::BETWEEN, Event::Check)),
+                    Checked::Ended(told) => {
+                        if let (Some(told), Some(unfilled)) =
+                            (told, self.unfilled.borrow().as_ref())
+                        {
+                            unfilled.call(told);
+                        }
+                        None
+                    }
+                };
+            }
+            // More may wait: a burst beyond one hand-over, or work asked from inside work.
+            Event::Ran => Self::hand(context),
             // One ask is retried at a time: a pause still running is for an ask since replaced.
             Event::Pause => {
                 self.pause = Some(context.set_timeout(named::PAUSE, Event::Paused));
@@ -215,14 +309,15 @@ where
         let messages = Messages {
             sender: context.sender(),
         };
-        let (window, asks) = named::drawing(|| (self.view)(self.running.program(), &messages));
-        // The reactor runs this once this drawing stands, with every control it names in place,
-        // and only where an ask was made since the drawing before.
+        let ((window, asks), arrivals) =
+            arrive::drawing(|| named::drawing(|| (self.view)(self.running.program(), &messages)));
+        // The reactor runs this once this drawing stands, with every control and place it names
+        // in place, and only where an ask of either was made since the drawing before.
         context.use_effect(
             "pamba-windows: what was asked of a named control",
-            asks,
+            (asks, arrivals),
             || {
-                named::carry_out();
+                arrive::carry_out();
                 None
             },
         );
@@ -237,6 +332,7 @@ where
         }
         // The reactor reports the colour mode alone, so the mode goes to the watch, which reads
         // what else decides how Windows draws and tells the program of the two as one fact.
+        self.unfilled.replace(window.unfilled);
         let asks = window.appeared.is_some();
         watch::asks(window.appeared);
         if asks {
@@ -251,7 +347,11 @@ where
         // is known to be on the screen: an ask made before then is carried out at that.
         Border::new()
             .on_got_focus(self.took.clone())
-            .content(window.content)
+            .content(
+                Grid::new()
+                    .element_ref(&self.laid)
+                    .children([window.content]),
+            )
             .into()
     }
 }
@@ -261,6 +361,8 @@ impl<P: Program, W: Performer<P>, V> Drop for Host<P, W, V> {
         beside::gone();
         watch::gone();
         named::gone();
+        arrive::gone();
+        window_thread::gone();
         self.threads.end();
     }
 }
@@ -287,8 +389,12 @@ where
         performer,
         view,
     }))));
-    App::run_component::<Host<P, W, V>>(seed).map_err(|error| Fault {
-        code: error.code().0,
-        message: error.message(),
+    App::run_component::<Host<P, W, V>>(seed).map_err(|error| {
+        // Where WinUI could not start, no window stood to end what was asked of it.
+        window_thread::gone();
+        Fault {
+            code: error.code().0,
+            message: error.message(),
+        }
     })
 }

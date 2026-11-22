@@ -1,6 +1,7 @@
 use windows_reactor::{Callback, View, WindowPlacement, WindowSize, WindowVisuals};
 
 use crate::appearance::Appearance;
+use crate::unfilled::Unfilled;
 
 /// One window as a program's present state has it: what it holds, and what it says of itself.
 #[derive(Debug)]
@@ -11,6 +12,7 @@ pub struct Window {
     pub(crate) sized: Option<Callback<WindowSize>>,
     pub(crate) appeared: Option<Callback<Appearance>>,
     pub(crate) placed: Option<Callback<WindowPlacement>>,
+    pub(crate) unfilled: Option<Callback<Unfilled>>,
 }
 
 impl Window {
@@ -23,6 +25,7 @@ impl Window {
             sized: None,
             appeared: None,
             placed: None,
+            unfilled: None,
         }
     }
 
@@ -64,6 +67,26 @@ impl Window {
     #[must_use]
     pub fn on_appearance(mut self, appeared: Callback<Appearance>) -> Self {
         self.appeared = Some(appeared);
+        self
+    }
+
+    /// Tells the program, once, that the layer did not find the window's content filling the
+    /// window when it first stood, and what it made of it: told at the check that ends the
+    /// layer's mends, a second or two after the window first stands. A window that stood right
+    /// tells nothing.
+    ///
+    /// ```
+    /// use pamba_windows::Window;
+    /// use pamba_windows::ui::{Callback, TextBlock};
+    ///
+    /// // A program that keeps its own log writes the line there.
+    /// let window = Window::new(TextBlock::new().text("Ready"))
+    ///     .on_unfilled(Callback::new(|told| eprintln!("the window opened unfilled: {told:?}")));
+    /// # drop(window);
+    /// ```
+    #[must_use]
+    pub fn on_unfilled(mut self, unfilled: Callback<Unfilled>) -> Self {
+        self.unfilled = Some(unfilled);
         self
     }
 }

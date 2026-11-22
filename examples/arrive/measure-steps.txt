@@ -1,0 +1,123 @@
+wait 1500
+front arrive
+wait 600
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800
+press Answer
+wait 1500
+rect The answer has arrived
+move 600 460
+wheel 10
+wait 800

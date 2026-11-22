@@ -14,7 +14,9 @@
     reason = "a day is placed in the computer's time zone through Windows' C interface, and nothing safe beneath this crate offers it"
 )]
 
+use std::error::Error;
 use std::ffi::c_void;
+use std::fmt;
 use std::ops::{Bound, RangeBounds};
 use std::ptr::null;
 
@@ -41,14 +43,31 @@ pub struct CalendarDay {
 }
 
 impl CalendarDay {
-    /// The day of that year, month (1 to 12) and day of the month. None where the calendar has
-    /// no such day, or the year is outside 1602 to 9999.
-    #[must_use]
-    pub fn new(year: i16, month: u8, day: u8) -> Option<Self> {
-        let real = (YEARS.0..=YEARS.1).contains(&year)
-            && (1..=12).contains(&month)
-            && (1..=days_in(year, month)).contains(&day);
-        real.then_some(Self { year, month, day })
+    /// The day of that year, month (1 to 12) and day of the month. Each figure is taken as a
+    /// program's own date gives it, in whichever whole-number type that is.
+    ///
+    /// # Errors
+    ///
+    /// [`NoDay::NoSuchDay`] where the calendar has no such day, whatever its year.
+    /// [`NoDay::YearOutside`] where the calendar has the day, and its year is outside 1602 to
+    /// 9999.
+    pub fn new(
+        year: impl Into<i64>,
+        month: impl TryInto<u8>,
+        day: impl TryInto<u8>,
+    ) -> Result<Self, NoDay> {
+        let year = year.into();
+        // A figure too large or too small for a month or a day of one is no figure of either.
+        let (Ok(month), Ok(day)) = (month.try_into(), day.try_into()) else {
+            return Err(NoDay::NoSuchDay);
+        };
+        if !((1..=12).contains(&month) && (1..=days_in(year, month)).contains(&day)) {
+            return Err(NoDay::NoSuchDay);
+        }
+        match i16::try_from(year) {
+            Ok(year) if (YEARS.0..=YEARS.1).contains(&year) => Ok(Self { year, month, day }),
+            _ => Err(NoDay::YearOutside),
+        }
     }
 
     /// The year.
@@ -71,7 +90,7 @@ impl CalendarDay {
 
     /// The day after. The last day of all has none, and gives itself.
     fn next(self) -> Self {
-        if self.day < days_in(self.year, self.month) {
+        if self.day < days_in(self.year.into(), self.month) {
             Self {
                 day: self.day + 1,
                 ..self
@@ -104,7 +123,7 @@ impl CalendarDay {
             let month = self.month - 1;
             Self {
                 month,
-                day: days_in(self.year, month),
+                day: days_in(self.year.into(), month),
                 ..self
             }
         } else if self.year > YEARS.0 {
@@ -126,17 +145,45 @@ impl CalendarDay {
         Self {
             year,
             month: self.month,
-            day: self.day.min(days_in(year, self.month)),
+            day: self.day.min(days_in(year.into(), self.month)),
         }
     }
 }
 
-const fn leap(year: i16) -> bool {
+/// Why three figures are no [`CalendarDay`].
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum NoDay {
+    /// The calendar has no such day: the month is not one of 1 to 12, or that month of that
+    /// year has no such day of the month.
+    NoSuchDay,
+    /// The calendar has the day, and its year is outside 1602 to 9999, the years a
+    /// [`CalendarDay`] is of.
+    YearOutside,
+}
+
+impl fmt::Display for NoDay {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NoSuchDay => formatter.write_str("the calendar has no such day"),
+            Self::YearOutside => write!(
+                formatter,
+                "the day's year is outside {} to {}",
+                YEARS.0, YEARS.1
+            ),
+        }
+    }
+}
+
+impl Error for NoDay {}
+
+/// Whether that year has a twenty-ninth of February, by the Gregorian calendar's rule carried
+/// to every year.
+const fn leap(year: i64) -> bool {
     year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 }
 
 /// How many days that month of that year has.
-const fn days_in(year: i16, month: u8) -> u8 {
+const fn days_in(year: i64, month: u8) -> u8 {
     match month {
         4 | 6 | 9 | 11 => 30,
         2 if leap(year) => 29,
@@ -145,32 +192,148 @@ const fn days_in(year: i16, month: u8) -> u8 {
     }
 }
 
-/// The first and the last day a picker offers. Each is the program's where `within` states it.
-/// Where it does not, it is [`REACH`] years from `today`, as Windows' picker stands when given
-/// no bound, and further where `held` lies beyond that, so that the day held is always one the
-/// picker can show. A span that would hold no day is its first day alone.
-fn span(
+/// The days a date picker offers, and the day it holds among them, or that it holds none.
+///
+/// A picker shows the day it holds only where it offers that day: Windows moves any other to
+/// the nearer end of the days offered, and shows that end. So the two are made together, and a
+/// day that is not offered is refused where they are made, with the day and the same days
+/// holding none. No picker is given a day it does not offer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Days {
     held: Option<CalendarDay>,
-    within: &impl RangeBounds<CalendarDay>,
-    today: CalendarDay,
-) -> (CalendarDay, CalendarDay) {
-    let first = match within.start_bound() {
-        Bound::Included(day) => *day,
-        Bound::Excluded(day) => day.next(),
-        Bound::Unbounded => {
-            let reach = today.years_on(-REACH);
-            held.map_or(reach, |held| held.min(reach))
+    /// The first day offered, where the program states one.
+    first: Option<CalendarDay>,
+    /// The last day offered, where the program states one: never before a first it states.
+    last: Option<CalendarDay>,
+}
+
+impl Days {
+    /// Any day offered, holding `held` or no day. A day converts to this, and so does an
+    /// `Option` of one.
+    #[must_use]
+    pub fn any(held: impl Into<Option<CalendarDay>>) -> Self {
+        Self {
+            held: held.into(),
+            first: None,
+            last: None,
         }
-    };
-    let last = match within.end_bound() {
-        Bound::Included(day) => *day,
-        Bound::Excluded(day) => day.previous(),
-        Bound::Unbounded => {
-            let reach = today.years_on(REACH);
-            held.map_or(reach, |held| held.max(reach))
+    }
+
+    /// The days `within` offered, holding `held` or no day: `first..=last` for those two and
+    /// the days between, or a range open at one end. Days that would be none are their first
+    /// day alone.
+    ///
+    /// # Errors
+    ///
+    /// [`NotOffered`] where `held` is a day before the first day `within` states, or after the
+    /// last.
+    pub fn within(
+        held: impl Into<Option<CalendarDay>>,
+        within: impl RangeBounds<CalendarDay>,
+    ) -> Result<Self, NotOffered> {
+        let first = match within.start_bound() {
+            Bound::Included(day) => Some(*day),
+            Bound::Excluded(day) => Some(day.next()),
+            Bound::Unbounded => None,
+        };
+        let last = match within.end_bound() {
+            Bound::Included(day) => Some(*day),
+            Bound::Excluded(day) => Some(day.previous()),
+            Bound::Unbounded => None,
+        };
+        let last = last.map(|last| first.map_or(last, |first| last.max(first)));
+        let offered = Self {
+            held: None,
+            first,
+            last,
+        };
+        match held.into() {
+            Some(day)
+                if first.is_some_and(|first| day < first)
+                    || last.is_some_and(|last| day > last) =>
+            {
+                Err(NotOffered { held: day, offered })
+            }
+            held => Ok(Self { held, ..offered }),
         }
-    };
-    (first, last.max(first))
+    }
+
+    /// The day held.
+    #[must_use]
+    pub const fn held(self) -> Option<CalendarDay> {
+        self.held
+    }
+}
+
+impl From<CalendarDay> for Days {
+    fn from(held: CalendarDay) -> Self {
+        Self::any(held)
+    }
+}
+
+impl From<Option<CalendarDay>> for Days {
+    fn from(held: Option<CalendarDay>) -> Self {
+        Self::any(held)
+    }
+}
+
+/// Why [`Days`] were not made: the day to hold is not one of the days offered.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NotOffered {
+    held: CalendarDay,
+    offered: Days,
+}
+
+impl NotOffered {
+    /// The day that is not offered.
+    #[must_use]
+    pub const fn held(self) -> CalendarDay {
+        self.held
+    }
+
+    /// The same days offered, holding no day: what a picker is given by a program that says
+    /// the day in words of its own beside it.
+    #[must_use]
+    pub const fn offered(self) -> Days {
+        self.offered
+    }
+}
+
+impl fmt::Display for NotOffered {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "{:04}-{:02}-{:02} is not one of the days offered",
+            self.held.year, self.held.month, self.held.day
+        )
+    }
+}
+
+impl Error for NotOffered {}
+
+/// The first and the last day a picker is given for `days`. Each is the program's where it
+/// states one. An end it leaves open stands [`REACH`] years from `today`, as Windows' picker
+/// stands when given no bound: further where the day held lies beyond that, and [`REACH`]
+/// years beyond the end the program does state where that end lies beyond it. So the picker
+/// always offers the day it holds, and never a day beyond an end the program states.
+fn span(days: Days, today: CalendarDay) -> (CalendarDay, CalendarDay) {
+    let first = days.first.unwrap_or_else(|| {
+        let reach = today.years_on(-REACH);
+        let reach = match days.last {
+            Some(last) if last < reach => last.years_on(-REACH),
+            _ => reach,
+        };
+        days.held.map_or(reach, |held| held.min(reach))
+    });
+    let last = days.last.unwrap_or_else(|| {
+        let reach = today.years_on(REACH);
+        let reach = match days.first {
+            Some(first) if first > reach => first.years_on(REACH),
+            _ => reach,
+        };
+        days.held.map_or(reach, |held| held.max(reach))
+    });
+    (first, last)
 }
 
 /// A date and a time of day as Windows' C interface states them (`SYSTEMTIME`).
@@ -232,11 +395,7 @@ fn today() -> CalendarDay {
 
 /// The day a clock's date is, where it is one a [`CalendarDay`] holds.
 fn day_on(clock: Clock) -> Option<CalendarDay> {
-    CalendarDay::new(
-        i16::try_from(clock.year).ok()?,
-        u8::try_from(clock.month).ok()?,
-        u8::try_from(clock.day).ok()?,
-    )
+    CalendarDay::new(clock.year, clock.month, clock.day).ok()
 }
 
 /// Noon of `day` where the computer is, as the instant Windows' picker takes. None where
@@ -294,18 +453,14 @@ mod sealed {
 /// `on_date_changed` gives one. These three take and give a day, and are what a program that
 /// holds a day calls in their place.
 pub trait DayPicker: sealed::Sealed + Sized {
-    /// Holds `held`, or no day, among the days `within`: `..` for any day, `first..=last` for
-    /// those two and the days between, or a range open at one end.
+    /// Offers the days of `days` and holds the day they hold, or no day. A day, or an `Option`
+    /// of one, is held among any days: `picker.days(day)`. Stated ends are [`Days::within`].
     ///
-    /// An end `within` leaves open stands a hundred years from the computer's today, as
-    /// Windows' picker stands when given none, and further where `held` lies beyond that. A day
-    /// held outside an end `within` states is shown as that end.
+    /// An end left open stands a hundred years from the computer's today, as Windows' picker
+    /// stands when given none: further where the day held lies beyond that, and a hundred years
+    /// beyond a stated end that itself lies beyond it.
     #[must_use]
-    fn days(
-        self,
-        held: impl Into<Option<CalendarDay>>,
-        within: impl RangeBounds<CalendarDay>,
-    ) -> Self;
+    fn days(self, days: impl Into<Days>) -> Self;
 
     /// States which day is today to the program. Windows marks today in the picker by the
     /// computer's own clock and can be told no other day, so its mark is shown only where the
@@ -320,13 +475,9 @@ pub trait DayPicker: sealed::Sealed + Sized {
 }
 
 impl DayPicker for CalendarDatePicker {
-    fn days(
-        self,
-        held: impl Into<Option<CalendarDay>>,
-        within: impl RangeBounds<CalendarDay>,
-    ) -> Self {
-        let held = held.into();
-        let (first, last) = span(held, &within, today());
+    fn days(self, days: impl Into<Days>) -> Self {
+        let days = days.into();
+        let (first, last) = span(days, today());
         // Windows places every day a `CalendarDay` holds. Were it to refuse one, the picker
         // would keep Windows' own bounds and hold no day.
         let (Some(first), Some(last)) = (noon(first), noon(last)) else {
@@ -334,7 +485,7 @@ impl DayPicker for CalendarDatePicker {
         };
         self.min_date(first)
             .max_date(last)
-            .date(held.and_then(noon))
+            .date(days.held.and_then(noon))
     }
 
     fn today(self, today: impl Into<Option<CalendarDay>>) -> Self {

@@ -303,6 +303,95 @@ impl<R> fmt::Debug for Places<R> {
     }
 }
 
+/// What a program asks of the things it names, where every ask is owed an answer.
+///
+/// [`Places`] keeps the newest ask alone, which is the rule for the keyboard: it stands in one
+/// place, and an ask for another replaces it. An act that has an outcome is another kind of ask:
+/// a document sent to a printer is printed, or its asker is told that it was not. A drawer keeps
+/// such asks here, in the order they were made, until the drawing that follows them stands, since
+/// that drawing may be the one that first shows the thing asked of. It then takes each once, with
+/// the reference that drawing has for its name, and with none where the drawing gave no such name:
+/// the drawer carries the first kind out and tells the asker of the second.
+///
+/// ```
+/// use pamba::{Asks, Places};
+///
+/// #[derive(PartialEq, Eq, Hash)]
+/// enum Paper {
+///     Receipt,
+/// }
+///
+/// let (mut places, mut asks) = (Places::new(), Asks::new());
+/// // A step shows the receipt and asks for it to be printed.
+/// asks.ask(Paper::Receipt, "print");
+/// // The drawing that follows gives the name to what it draws.
+/// places.begin();
+/// let receipt = places.named(Paper::Receipt, || "the document");
+/// places.end();
+/// // Once that drawing stands, the ask is taken with the document it is for, once.
+/// assert_eq!(asks.take(&places), [(Some(receipt), "print")]);
+/// assert_eq!(asks.take(&places), []);
+/// ```
+pub struct Asks<A> {
+    waiting: Vec<(Kept, A)>,
+    made: u64,
+}
+
+impl<A> Asks<A> {
+    /// Nothing asked.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            waiting: Vec::new(),
+            made: 0,
+        }
+    }
+
+    /// The program asks `what` of the thing called `name`. It is kept behind the asks already
+    /// waiting, and replaces none of them.
+    pub fn ask<K: Hash + Eq + 'static>(&mut self, name: K, what: A) {
+        self.waiting.push((Kept(Box::new(name)), what));
+        self.made += 1;
+    }
+
+    /// How many asks have been made: it changes exactly when there is a new ask to take, so a
+    /// drawer that acts once a drawing stands compares it with the count it last acted on.
+    #[must_use]
+    pub fn made(&self) -> u64 {
+        self.made
+    }
+
+    /// Takes every ask that waits, in the order they were made, once the drawing that follows them
+    /// stands: each with the reference `places` has for its name, and with none where that
+    /// drawing gave no such name. An ask is taken once, whichever it is: a later drawing that
+    /// gives the name does not bring it back.
+    pub fn take<R: Clone>(&mut self, places: &Places<R>) -> Vec<(Option<R>, A)> {
+        std::mem::take(&mut self.waiting)
+            .into_iter()
+            .map(|(name, what)| {
+                let reference = places.held.get(&*name.0).map(|held| held.reference.clone());
+                (reference, what)
+            })
+            .collect()
+    }
+}
+
+impl<A> Default for Asks<A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<A> fmt::Debug for Asks<A> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Asks")
+            .field("waiting", &self.waiting.len())
+            .field("made", &self.made)
+            .finish_non_exhaustive()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::Name;

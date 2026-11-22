@@ -13,7 +13,8 @@
 //!
 //! What a platform's layer needs beside the loop is here too: [`Places`] keeps the places a
 //! program names for what one drawing after another shows, so that what the program asks of a
-//! place reaches the control that stands there.
+//! place reaches the control that stands there. [`Asks`] keeps, beside it, what a program asks of a
+//! named thing where each ask is owed an answer.
 //!
 //! The Windows layer, which draws a program with WinUI 3, is the crate `pamba-windows`.
 
@@ -29,6 +30,6 @@ mod run;
 pub use mailbox::{Dispatcher, Sender, Unsent};
 pub use manual::{Manual, Unsettled};
 pub use performer::{Performer, Running};
-pub use places::Places;
+pub use places::{Asks, Places};
 pub use program::{Never, Program};
 pub use run::{Loop, ROOM, Turn};
