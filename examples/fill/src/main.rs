@@ -15,11 +15,12 @@
 //! rectangle by more than two pixels either way.
 //!
 //! What the layer tells the program of a window it did not find filled (`Window::on_unfilled`)
-//! is written as one line when it is told, and each placement it is told (`Window::on_placement`)
-//! as another:
+//! is written when it is told as two lines, its sentence and its value, and each placement it is
+//! told (`Window::on_placement`) as another:
 //!
 //! ```text
-//! told: ChildWindow { mends: 1, fills: true }
+//! told: the area that holds the window's content stood smaller than the window; the window was mended 1 time, and the content was then found to fill it
+//! told value: ChildWindow { mends: 1, fills: true }
 //! placed: 1264x672 at 40, 40, maximised true
 //! ```
 //!
@@ -450,7 +451,10 @@ mod shown {
                     }
                     effects
                 }
-                Message::Told(told) => vec![Effect::Note(format!("told: {told:?}"))],
+                Message::Told(told) => vec![
+                    Effect::Note(format!("told: {told}")),
+                    Effect::Note(format!("told value: {told:?}")),
+                ],
                 Message::Placed(placed) => vec![Effect::Note(format!(
                     "placed: {}x{} at {}, {}, maximised {}",
                     placed.width, placed.height, placed.x, placed.y, placed.maximized

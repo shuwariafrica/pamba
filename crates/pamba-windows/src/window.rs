@@ -81,7 +81,7 @@ impl Window {
     ///
     /// // A program that keeps its own log writes the line there.
     /// let window = Window::new(TextBlock::new().text("Ready"))
-    ///     .on_unfilled(Callback::new(|told| eprintln!("the window opened unfilled: {told:?}")));
+    ///     .on_unfilled(Callback::new(|told| eprintln!("the window opened unfilled: {told}")));
     /// # drop(window);
     /// ```
     #[must_use]
