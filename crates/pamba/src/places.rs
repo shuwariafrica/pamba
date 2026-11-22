@@ -65,10 +65,26 @@ impl Borrow<dyn Name> for Kept {
     }
 }
 
+/// What the drawings give one name: a control, a place, or both.
 struct Held<R> {
+    control: Option<Given<R>>,
+    place: Option<Given<R>>,
+}
+
+struct Given<R> {
     reference: R,
-    /// The drawing that last gave this name.
+    /// The drawing that last gave the name to this kind of thing.
     drawn: u64,
+}
+
+impl<R: Clone> Held<R> {
+    /// What an ask of this name goes to: the control, the more exact of the two, else the place.
+    fn asked(&self) -> Option<R> {
+        self.control
+            .as_ref()
+            .or(self.place.as_ref())
+            .map(|given| given.reference.clone())
+    }
 }
 
 /// The places a program names, as one platform's drawer keeps them for a window.
@@ -79,6 +95,23 @@ struct Held<R> {
 /// reference `R` to each thing a drawing names, the same reference for as long as each drawing
 /// names it, and the newest ask until the drawing that follows it stands: that drawing may be the
 /// one that first shows the place.
+///
+/// A drawing gives a name to a control, which an ask reaches itself, or to a place round a part of
+/// what is drawn, which the platform passes an ask on from to something inside it. A name may be
+/// given to both: each kind keeps its own reference, and an ask goes to the control where the
+/// newest drawing gives the name to one, else to the place.
+///
+/// ```
+/// use pamba::Places;
+///
+/// let mut places = Places::new();
+/// places.ask("expiry");
+/// places.begin();
+/// // The day's control takes no name of its own: the part of the window round it does.
+/// let expiry = places.place("expiry", || "the border");
+/// places.end();
+/// assert_eq!(places.take_asked(), Some(expiry));
+/// ```
 ///
 /// A name is any value that can be compared and hashed, such as a case of the program's own enum
 /// of places. Names of different types are different names.
@@ -170,35 +203,73 @@ impl<R> Places<R> {
         self.drawing += 1;
     }
 
-    /// The reference for what this drawing calls `name`: the one the drawing before had for it,
-    /// or `new`'s where that drawing did not give the name.
+    /// The reference for the control this drawing calls `name`: the one the drawing before had
+    /// for it, or `new`'s where that drawing gave the name to no control.
     ///
-    /// A drawing gives one name to one thing: given to two, they share the reference.
+    /// A drawing gives one name to one control: given to two, they share the reference.
     pub fn named<K>(&mut self, name: K, new: impl FnOnce() -> R) -> R
     where
         K: Hash + Eq + 'static,
         R: Clone,
     {
+        self.give(name, |held| &mut held.control, new)
+    }
+
+    /// The reference for the place this drawing calls `name`: the one the drawing before had for
+    /// it, or `new`'s where that drawing gave the name to no place.
+    ///
+    /// A drawing gives one name to one place: given to two, they share the reference.
+    pub fn place<K>(&mut self, name: K, new: impl FnOnce() -> R) -> R
+    where
+        K: Hash + Eq + 'static,
+        R: Clone,
+    {
+        self.give(name, |held| &mut held.place, new)
+    }
+
+    /// The reference this drawing gives `name`'s `kind`: the drawing before's, else `new`'s.
+    fn give<K>(
+        &mut self,
+        name: K,
+        kind: fn(&mut Held<R>) -> &mut Option<Given<R>>,
+        new: impl FnOnce() -> R,
+    ) -> R
+    where
+        K: Hash + Eq + 'static,
+        R: Clone,
+    {
+        let drawing = self.drawing;
         let borrowed: &dyn Name = &name;
         if let Some(held) = self.held.get_mut(borrowed) {
-            held.drawn = self.drawing;
-            return held.reference.clone();
+            let given = kind(held).get_or_insert_with(|| Given {
+                reference: new(),
+                drawn: drawing,
+            });
+            given.drawn = drawing;
+            return given.reference.clone();
         }
         let reference = new();
-        self.held.insert(
-            Kept(Box::new(name)),
-            Held {
-                reference: reference.clone(),
-                drawn: self.drawing,
-            },
-        );
+        let mut held = Held {
+            control: None,
+            place: None,
+        };
+        *kind(&mut held) = Some(Given {
+            reference: reference.clone(),
+            drawn: drawing,
+        });
+        self.held.insert(Kept(Box::new(name)), held);
         reference
     }
 
-    /// The drawing is made: a name it did not give is dropped, with its reference.
+    /// The drawing is made: of each name's control and place, the one it did not give is dropped
+    /// with its reference, and a name it gave to neither is dropped.
     pub fn end(&mut self) {
         let drawing = self.drawing;
-        self.held.retain(|_, held| held.drawn == drawing);
+        self.held.retain(|_, held| {
+            held.control.take_if(|given| given.drawn != drawing);
+            held.place.take_if(|given| given.drawn != drawing);
+            held.control.is_some() || held.place.is_some()
+        });
     }
 
     /// The program asks for the place called `name`. It replaces an ask not yet taken, and ends
@@ -223,14 +294,15 @@ impl<R> Places<R> {
     }
 
     /// Takes the newest ask, once the drawing that follows it stands, and gives the reference
-    /// that drawing had for its name. Where the drawing gave no such name the ask comes to
-    /// nothing: it is taken all the same, and a later drawing does not bring it back.
+    /// that drawing had for its name: its control's, else its place's. Where the drawing gave no
+    /// such name the ask comes to nothing: it is taken all the same, and a later drawing does not
+    /// bring it back.
     pub fn take_asked(&mut self) -> Option<R>
     where
         R: Clone,
     {
         let asked = self.asked.take()?;
-        let reference = self.held.get(&*asked.0).map(|held| held.reference.clone());
+        let reference = self.held.get(&*asked.0).and_then(Held::asked);
         self.taken = reference.is_some().then_some(Taken {
             name: asked,
             left: self.retries,
@@ -269,10 +341,7 @@ impl<R> Places<R> {
     {
         let taken = self.taken.as_mut().filter(|taken| taken.waits)?;
         taken.waits = false;
-        let reference = self
-            .held
-            .get(&*taken.name.0)
-            .map(|held| held.reference.clone());
+        let reference = self.held.get(&*taken.name.0).and_then(Held::asked);
         if reference.is_none() {
             self.taken = None;
         }
@@ -362,16 +431,14 @@ impl<A> Asks<A> {
     }
 
     /// Takes every ask that waits, in the order they were made, once the drawing that follows them
-    /// stands: each with the reference `places` has for its name, and with none where that
-    /// drawing gave no such name. An ask is taken once, whichever it is: a later drawing that
-    /// gives the name does not bring it back.
+    /// stands: each with the reference `places` has for its name, its control's where the drawing
+    /// gave the name to a control and to a place, and with none where that drawing gave no such
+    /// name. An ask is taken once, whichever it is: a later drawing that gives the name does not
+    /// bring it back.
     pub fn take<R: Clone>(&mut self, places: &Places<R>) -> Vec<(Option<R>, A)> {
         std::mem::take(&mut self.waiting)
             .into_iter()
-            .map(|(name, what)| {
-                let reference = places.held.get(&*name.0).map(|held| held.reference.clone());
-                (reference, what)
-            })
+            .map(|(name, what)| (places.held.get(&*name.0).and_then(Held::asked), what))
             .collect()
     }
 }

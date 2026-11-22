@@ -14,8 +14,10 @@ carries over.
   effects as data; a `Performer` carries them out on one platform; a `Loop` runs the two on the
   thread that draws. `Manual` runs a program and its performer in a test with no window and no
   second thread. `Places` keeps, for a platform's layer, the places a program names from one
-  drawing to the next, and retries an ask the platform cannot carry out yet. `Sender::wrapping`
-  gives a part of a program a sender for its own messages, made from the whole's by a function.
+  drawing to the next, and retries an ask the platform cannot carry out yet. `Places::place` gives
+  a name to a place round part of a drawing as `Places::named` gives it to a control, and an ask of
+  a name the drawing gives to both goes to the control. `Sender::wrapping` gives a part of a
+  program a sender for its own messages, made from the whole's by a function.
 - `pamba-host`, what a program asks of the computer it runs on, with no window and no drawing, on
   every platform. `session::switch_user` says once whether the computer offers to leave the screen
   to another person: the act, `SwitchUser`, whose `now` leaves the screen and answers `Stayed`
