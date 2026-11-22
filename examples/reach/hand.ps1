@@ -12,6 +12,9 @@
                           steps after it fall on it
       move X Y            the pointer to a place
       click X Y           the left button pressed and released there
+      on NAME             the same at the middle of the first element of the front window whose UI Automation name
+                          begins with NAME, so that steps hold at any scale
+      at PX PY            the same at a place in hundredths of the front window's width and height, from its top left
       double X Y          twice, as a double click
       drag X1 Y1 X2 Y2    the left button down at the first place, across in twenty moves, up at the second
       keys TEXT           keys as System.Windows.Forms.SendKeys writes them: ^c is Ctrl+C, {TAB} is Tab; {SPACE} is the
@@ -47,6 +50,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms
 Add-Type -Namespace Pamba -Name Hand -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+[DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr context);
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr window);
 [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, System.UIntPtr extra);
 [DllImport("user32.dll")] public static extern System.IntPtr LoadCursor(System.IntPtr module, System.IntPtr name);
@@ -101,7 +105,6 @@ public static bool Finger(int x, int y, uint flags) {
 $moveTo = 0x8001
 $leftDown = 0x0002
 $leftUp = 0x0004
-$screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 
 function Move-Pointer {
     [CmdletBinding()]
@@ -117,7 +120,7 @@ function Move-Pointer {
     }
 }
 
-function Set-LeftButton {
+function Send-LeftButton {
     [CmdletBinding()]
     [OutputType([void])]
     param([Parameter(Mandatory)][bool] $Down)
@@ -125,6 +128,41 @@ function Set-LeftButton {
         $flag = if ($Down) { $leftDown } else { $leftUp }
         [Pamba.Hand]::mouse_event($flag, 0, 0, 0, [UIntPtr]::Zero)
         Start-Sleep -Milliseconds 40
+    }
+}
+
+function Invoke-Click {
+    [CmdletBinding()]
+    [OutputType([void])]
+    param([Parameter(Mandatory)][int] $X, [Parameter(Mandatory)][int] $Y)
+    process {
+        Move-Pointer -X $X -Y $Y
+        Send-LeftButton -Down $true
+        Send-LeftButton -Down $false
+    }
+}
+
+function Get-FrontWindow {
+    [CmdletBinding()]
+    [OutputType([System.Windows.Rect])]
+    param()
+    process {
+        if ($null -eq $script:front) { throw 'a step that places itself on the front window needs a front step before it' }
+        $script:front.Current.BoundingRectangle
+    }
+}
+
+function Find-Named {
+    [CmdletBinding()]
+    [OutputType([System.Windows.Rect])]
+    param([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string] $Name)
+    process {
+        [void](Get-FrontWindow)
+        $all = $script:front.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition)
+        foreach ($element in $all) {
+            if ($element.Current.Name.StartsWith($Name, [System.StringComparison]::Ordinal)) { return $element.Current.BoundingRectangle }
+        }
+        throw "nothing in the front window has a name that begins with `"$Name`""
     }
 }
 
@@ -140,8 +178,13 @@ function Get-Focus {
     }
 }
 
-[void][Pamba.Hand]::SetProcessDPIAware()
+# Aware of each screen's own scale, so that UI Automation's places, the screen's size and the pointer's moves are all in
+# its pixels at the scale it shows now: a process aware only of the scale at sign-in is given places scaled to that
+# one, and its steps land beside what they name once the scale has changed. -4 asks for that awareness, version 2.
+if (-not [Pamba.Hand]::SetProcessDpiAwarenessContext([IntPtr] -4)) { [void][Pamba.Hand]::SetProcessDPIAware() }
+$screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 $script:fingers = $false
+$script:front = $null
 $answers = [System.Collections.Generic.List[string]]::new()
 
 foreach ($line in Get-Content -LiteralPath $Steps) {
@@ -155,30 +198,36 @@ foreach ($line in Get-Content -LiteralPath $Steps) {
             $window = $process.MainWindowHandle
             if ($window -eq [IntPtr]::Zero) { throw "process $rest has no window to bring to the front" }
             [void][Pamba.Hand]::SetForegroundWindow($window)
+            $script:front = [Windows.Automation.AutomationElement]::FromHandle($window)
             Start-Sleep -Milliseconds 400
         }
         'move' { Move-Pointer -X $places[0] -Y $places[1] }
-        'click' {
-            Move-Pointer -X $places[0] -Y $places[1]
-            Set-LeftButton -Down $true
-            Set-LeftButton -Down $false
+        'click' { Invoke-Click -X $places[0] -Y $places[1] }
+        'on' {
+            $named = Find-Named -Name $rest
+            Invoke-Click -X ([int]($named.Left + $named.Width / 2)) -Y ([int]($named.Top + $named.Height / 2))
+        }
+        'at' {
+            $parts = $rest -split '\s+' | ForEach-Object { [int] $_ }
+            $bounds = Get-FrontWindow
+            Invoke-Click -X ([int]($bounds.Left + $bounds.Width * $parts[0] / 100)) -Y ([int]($bounds.Top + $bounds.Height * $parts[1] / 100))
         }
         'double' {
             Move-Pointer -X $places[0] -Y $places[1]
             foreach ($press in 1..2) {
-                Set-LeftButton -Down $true
-                Set-LeftButton -Down $false
+                Send-LeftButton -Down $true
+                Send-LeftButton -Down $false
             }
         }
         'drag' {
             Move-Pointer -X $places[0] -Y $places[1]
-            Set-LeftButton -Down $true
+            Send-LeftButton -Down $true
             foreach ($part in 1..20) {
                 $x = $places[0] + [int](($places[2] - $places[0]) * $part / 20)
                 $y = $places[1] + [int](($places[3] - $places[1]) * $part / 20)
                 Move-Pointer -X $x -Y $y
             }
-            Set-LeftButton -Down $false
+            Send-LeftButton -Down $false
         }
         'keys' {
             [System.Windows.Forms.SendKeys]::SendWait($rest.Replace('{SPACE}', ' '))

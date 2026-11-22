@@ -30,7 +30,9 @@ carries over.
   an `Unfilled` that says itself in one plain sentence for the program's log.
   `Messages` turns what a control
   reports into a message of the program's, and `Messages::routed` lets a program take a key or a
-  pointer for itself. `named` gives a control a name of the program's, and `focus` stands the
+  pointer for itself. A pointer's press moves the keyboard only onto something that takes it:
+  a press on the window's ground, on words or on its title band leaves the keyboard where it stood.
+  `named` gives a control a name of the program's, and `focus` stands the
   keyboard at it once the drawing after the step stands, asking again for a control Windows shows a
   moment later, such as a field in an expander the person has just opened. `place` gives part of
   the drawing a name of the program's as the place where an answer arrives: `bring_into_view`

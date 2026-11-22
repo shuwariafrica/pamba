@@ -1,0 +1,9 @@
+focus: "Press" ControlType.Button Button
+focus: "Press" ControlType.Button Button
+focus: "Press" ControlType.Button Button
+focus: "Press" ControlType.Button Button
+focus: "Field" ControlType.Edit TextBox
+focus: "After the field" ControlType.Button Button
+focus: "Press" ControlType.Button Button
+focus: "" ControlType.Pane InputSiteWindowClass
+focus: "" ControlType.Pane InputSiteWindowClass

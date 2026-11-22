@@ -29,6 +29,7 @@ mod contrast;
 mod days;
 mod fill;
 mod host;
+mod keep;
 mod named;
 mod tell;
 mod threads;

@@ -510,6 +510,34 @@ impl FocusManager {
             ))
         })
     }
+    pub fn LosingFocus<F>(handler: F) -> windows_core::Result<windows_core::EventRevoker>
+    where
+        F: Fn(
+                windows_core::Ref<windows_core::IInspectable>,
+                windows_core::Ref<LosingFocusEventArgs>,
+            ) + Send
+            + Sync
+            + 'static,
+    {
+        let handler = <EventHandler<LosingFocusEventArgs>>::new(move |a0, a1| {
+            handler(a0, a1);
+            Ok(())
+        });
+        Self::IFocusManagerStatics(|this| unsafe {
+            let mut result__ = core::mem::zeroed();
+            let token__ = (windows_core::Interface::vtable(this).LosingFocus)(
+                windows_core::Interface::as_raw(this),
+                windows_core::Interface::as_raw(&handler),
+                &mut result__,
+            )
+            .map(|| result__)?;
+            Ok(windows_core::EventRevoker::new(
+                this.clone(),
+                token__,
+                windows_core::Interface::vtable(this).RemoveLosingFocus,
+            ))
+        })
+    }
     pub fn GetFocusedElementWithRoot<P0>(
         xamlroot: P0,
     ) -> windows_core::Result<windows_core::IInspectable>
@@ -583,6 +611,24 @@ impl windows_core::RuntimeName for FocusManagerGotFocusEventArgs {
 }
 unsafe impl Send for FocusManagerGotFocusEventArgs {}
 unsafe impl Sync for FocusManagerGotFocusEventArgs {}
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct FocusState(pub i32);
+impl FocusState {
+    pub const Unfocused: Self = Self(0);
+    pub const Pointer: Self = Self(1);
+    pub const Keyboard: Self = Self(2);
+    pub const Programmatic: Self = Self(3);
+}
+impl windows_core::imp::TypeKind for FocusState {
+    type TypeKind = windows_core::imp::CopyType;
+}
+impl windows_core::RuntimeType for FocusState {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::from_slice(b"enum(Microsoft.UI.Xaml.FocusState;i4)");
+    const NAME: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::from_slice(b"Microsoft.UI.Xaml.FocusState");
+}
 #[repr(transparent)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FrameworkElement(windows_core::IUnknown);
@@ -927,8 +973,13 @@ pub struct IFocusManagerStatics_Vtbl {
     RemoveLostFocus: usize,
     GettingFocus: usize,
     RemoveGettingFocus: usize,
-    LosingFocus: usize,
-    RemoveLosingFocus: usize,
+    pub LosingFocus: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        *mut core::ffi::c_void,
+        *mut i64,
+    ) -> windows_core::HRESULT,
+    pub RemoveLosingFocus:
+        unsafe extern "system" fn(*mut core::ffi::c_void, i64) -> windows_core::HRESULT,
     TryFocusAsync: usize,
     TryMoveFocusAsync: usize,
     TryMoveFocusWithOptionsAsync: usize,
@@ -993,6 +1044,46 @@ pub struct IFrameworkElementAutomationPeerStatics_Vtbl {
         *mut core::ffi::c_void,
         *mut *mut core::ffi::c_void,
     ) -> windows_core::HRESULT,
+}
+windows_core::imp::define_winrt_interface!(
+    ILosingFocusEventArgs,
+    ILosingFocusEventArgs_Vtbl,
+    0xfa0e5ffa_2b1b_52f8_bb66_e35f51e73cf3,
+    b"Microsoft.UI.Xaml.Input.ILosingFocusEventArgs"
+);
+#[repr(C)]
+pub struct ILosingFocusEventArgs_Vtbl {
+    pub base__: windows_core::IInspectable_Vtbl,
+    pub OldFocusedElement: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        *mut *mut core::ffi::c_void,
+    ) -> windows_core::HRESULT,
+    pub NewFocusedElement: unsafe extern "system" fn(
+        *mut core::ffi::c_void,
+        *mut *mut core::ffi::c_void,
+    ) -> windows_core::HRESULT,
+    SetNewFocusedElement: usize,
+    pub FocusState:
+        unsafe extern "system" fn(*mut core::ffi::c_void, *mut FocusState) -> windows_core::HRESULT,
+    Direction: usize,
+    Handled: usize,
+    SetHandled: usize,
+    InputDevice: usize,
+    Cancel: usize,
+    SetCancel: usize,
+    CorrelationId: usize,
+    pub TryCancel:
+        unsafe extern "system" fn(*mut core::ffi::c_void, *mut bool) -> windows_core::HRESULT,
+}
+windows_core::imp::define_winrt_interface!(
+    IRoutedEventArgs,
+    IRoutedEventArgs_Vtbl,
+    0x0908c407_1c7d_5de3_9c50_d971c62ec8ec,
+    b"Microsoft.UI.Xaml.IRoutedEventArgs"
+);
+#[repr(C)]
+pub struct IRoutedEventArgs_Vtbl {
+    pub base__: windows_core::IInspectable_Vtbl,
 }
 windows_core::imp::define_winrt_interface!(
     IScrollView,
@@ -1360,6 +1451,71 @@ pub struct IXamlRoot_Vtbl {
         *mut *mut core::ffi::c_void,
     ) -> windows_core::HRESULT,
 }
+#[repr(transparent)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LosingFocusEventArgs(windows_core::IUnknown);
+windows_core::imp::interface_hierarchy!(
+    LosingFocusEventArgs,
+    windows_core::IUnknown,
+    windows_core::IInspectable
+);
+windows_core::imp::required_hierarchy!(LosingFocusEventArgs, RoutedEventArgs);
+impl LosingFocusEventArgs {
+    pub fn OldFocusedElement(&self) -> windows_core::Result<DependencyObject> {
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(self).OldFocusedElement)(
+                windows_core::Interface::as_raw(self),
+                &mut result__,
+            )
+            .and_then(|| windows_core::imp::from_abi(result__))
+        }
+    }
+    pub fn NewFocusedElement(&self) -> windows_core::Result<DependencyObject> {
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(self).NewFocusedElement)(
+                windows_core::Interface::as_raw(self),
+                &mut result__,
+            )
+            .and_then(|| windows_core::imp::from_abi(result__))
+        }
+    }
+    pub fn FocusState(&self) -> windows_core::Result<FocusState> {
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(self).FocusState)(
+                windows_core::Interface::as_raw(self),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+    pub fn TryCancel(&self) -> windows_core::Result<bool> {
+        unsafe {
+            let mut result__ = core::mem::zeroed();
+            (windows_core::Interface::vtable(self).TryCancel)(
+                windows_core::Interface::as_raw(self),
+                &mut result__,
+            )
+            .map(|| result__)
+        }
+    }
+}
+impl windows_core::RuntimeType for LosingFocusEventArgs {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::for_class::<Self, ILosingFocusEventArgs>();
+}
+unsafe impl windows_core::Interface for LosingFocusEventArgs {
+    type Vtable = <ILosingFocusEventArgs as windows_core::Interface>::Vtable;
+    const IID: windows_core::GUID = <ILosingFocusEventArgs as windows_core::Interface>::IID;
+    const INSPECTABLE: bool = true;
+}
+impl windows_core::RuntimeName for LosingFocusEventArgs {
+    const NAME: &'static str = "Microsoft.UI.Xaml.Input.LosingFocusEventArgs";
+}
+unsafe impl Send for LosingFocusEventArgs {}
+unsafe impl Sync for LosingFocusEventArgs {}
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rect {
@@ -1377,6 +1533,28 @@ impl windows_core::RuntimeType for Rect {
     const NAME: windows_core::imp::ConstBuffer =
         windows_core::imp::ConstBuffer::from_slice(b"Windows.Foundation.Rect");
 }
+#[repr(transparent)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RoutedEventArgs(windows_core::IUnknown);
+windows_core::imp::interface_hierarchy!(
+    RoutedEventArgs,
+    windows_core::IUnknown,
+    windows_core::IInspectable
+);
+impl windows_core::RuntimeType for RoutedEventArgs {
+    const SIGNATURE: windows_core::imp::ConstBuffer =
+        windows_core::imp::ConstBuffer::for_class::<Self, IRoutedEventArgs>();
+}
+unsafe impl windows_core::Interface for RoutedEventArgs {
+    type Vtable = <IRoutedEventArgs as windows_core::Interface>::Vtable;
+    const IID: windows_core::GUID = <IRoutedEventArgs as windows_core::Interface>::IID;
+    const INSPECTABLE: bool = true;
+}
+impl windows_core::RuntimeName for RoutedEventArgs {
+    const NAME: &'static str = "Microsoft.UI.Xaml.RoutedEventArgs";
+}
+unsafe impl Send for RoutedEventArgs {}
+unsafe impl Sync for RoutedEventArgs {}
 #[repr(transparent)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScrollView(windows_core::IUnknown);

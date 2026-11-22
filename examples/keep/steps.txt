@@ -1,0 +1,28 @@
+wait 1200
+front keep
+wait 600
+focus
+at 80 80
+wait 400
+focus
+on A sentence
+wait 400
+focus
+at 50 2
+wait 400
+focus
+on Field
+wait 400
+focus
+keys {TAB}
+wait 300
+focus
+on Press
+wait 400
+focus
+on Take every control away
+wait 600
+focus
+at 80 80
+wait 400
+focus

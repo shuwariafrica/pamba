@@ -29,5 +29,11 @@ Microsoft.UI.Xaml.Automation.Peers.AutomationPeer::RaiseNotificationEvent
 Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationKind::Other
 Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationProcessing::All
 
+// The keyboard about to leave a control: where it stood, what would take it, what moved it, and the leaving
+// refused.
+Microsoft.UI.Xaml.Input.FocusManager::{add_LosingFocus, remove_LosingFocus}
+Microsoft.UI.Xaml.Input.LosingFocusEventArgs::{get_OldFocusedElement, get_NewFocusedElement, get_FocusState, TryCancel}
+Microsoft.UI.Xaml.FocusState::{Unfocused, Pointer, Keyboard, Programmatic}
+
 // Windows' own: the handler of XAML's static event.
 Windows.Foundation.EventHandler
