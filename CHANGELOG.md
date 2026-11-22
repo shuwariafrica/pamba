@@ -29,7 +29,9 @@ carries over.
   stand on it, which under a contrast theme are the theme's own pair for what is selected.
   `ui::CalendarDay` is a day of the calendar as a program holds one, and `ui::DayPicker` has
   Windows' date picker hold that day and tell the day a person picks, the same day in whichever
-  time zone the computer is in.
+  time zone the computer is in. `CalendarDay::new` says why three figures are no day (`NoDay`), and
+  `ui::Days` holds the days a picker offers with the day it holds among them, refusing a day that is
+  not offered (`NotOffered`): Windows would show another day in its place.
 - `pamba-windows-build`, what the build script of a program on the Windows layer calls, so that
   the program starts on a Windows computer that has no Windows App Runtime installed. It stages
   the runtime beside the executable, with the licence texts of its two packages in `licenses`,

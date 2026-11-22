@@ -9,6 +9,11 @@
 //! each, to the file the first argument names. A run with the computer in one time zone and a
 //! run with it in another write the same lines, which is what `DayPicker` is there for.
 //!
+//! Two presses put the second picker's day outside the days it offers: one has the program hold
+//! a day of the month before, and one moves the days offered a month on. A picker cannot show a
+//! day it does not offer, so the program is refused the pair, gives the picker those days
+//! holding none, and goes on saying the day it holds in its own figures beside it.
+//!
 //! On a signed-in Windows desktop: `days days.log 2026-11-21 2026-11-21`, the day held and
 //! then the day the program takes to be today. Either may be left out.
 
@@ -59,6 +64,8 @@ mod shown {
         Any(Option<CalendarDay>),
         OfMonth(Option<CalendarDay>),
         HoldNone,
+        HoldBefore,
+        MonthOn,
     }
 
     #[derive(Debug)]
@@ -93,8 +100,40 @@ mod shown {
                     self.of_month = None;
                     "the program holds no day".to_owned()
                 }
+                Message::HoldBefore => {
+                    self.of_month = self.month.and_then(|(first, _)| month_before(first));
+                    format!("a day of the month: {}", self.offered().1)
+                }
+                Message::MonthOn => {
+                    self.month = self.month.and_then(|(first, _)| month_after(first));
+                    format!(
+                        "the month is now {} to {}: {}",
+                        figures(self.month.map(|(first, _)| first)),
+                        figures(self.month.map(|(_, last)| last)),
+                        self.offered().1
+                    )
+                }
             };
             vec![Effect::Note(note)]
+        }
+    }
+
+    impl Days {
+        /// What the second picker is given, and how the day it holds stands among the days it offers, in words.
+        fn offered(&self) -> (pamba_windows::ui::Days, String) {
+            let Some((first, last)) = self.month else {
+                return (
+                    self.of_month.into(),
+                    format!("holding {}", figures(self.of_month)),
+                );
+            };
+            match pamba_windows::ui::Days::within(self.of_month, first..=last) {
+                Ok(days) => (days, format!("holding {}", figures(self.of_month))),
+                Err(refused) => (
+                    refused.offered(),
+                    format!("{refused}, and the picker holds none"),
+                ),
+            }
         }
     }
 
@@ -136,19 +175,39 @@ mod shown {
     fn stated(figures: Option<OsString>) -> Option<CalendarDay> {
         let figures = figures?.into_string().ok()?;
         let mut parts = figures.split('-');
-        let year = parts.next()?.parse().ok()?;
-        let month = parts.next()?.parse().ok()?;
-        let day = parts.next()?.parse().ok()?;
-        CalendarDay::new(year, month, day)
+        let year: i32 = parts.next()?.parse().ok()?;
+        let month: u8 = parts.next()?.parse().ok()?;
+        let day: u8 = parts.next()?.parse().ok()?;
+        CalendarDay::new(year, month, day).ok()
     }
 
     /// The first and the last day of the month `day` is in.
     fn month_of(day: CalendarDay) -> Option<(CalendarDay, CalendarDay)> {
-        let first = CalendarDay::new(day.year(), day.month(), 1)?;
+        let first = CalendarDay::new(day.year(), day.month(), 1).ok()?;
         let last = (28..=31)
             .rev()
-            .find_map(|of_month| CalendarDay::new(day.year(), day.month(), of_month))?;
+            .find_map(|of_month| CalendarDay::new(day.year(), day.month(), of_month).ok())?;
         Some((first, last))
+    }
+
+    /// The fifteenth of the month before the one `first` is in.
+    fn month_before(first: CalendarDay) -> Option<CalendarDay> {
+        let (year, month) = if first.month() == 1 {
+            (first.year() - 1, 12)
+        } else {
+            (first.year(), first.month() - 1)
+        };
+        CalendarDay::new(year, month, 15).ok()
+    }
+
+    /// The first and the last day of the month after the one `first` is in.
+    fn month_after(first: CalendarDay) -> Option<(CalendarDay, CalendarDay)> {
+        let (year, month) = if first.month() == 12 {
+            (first.year() + 1, 1)
+        } else {
+            (first.year(), first.month() + 1)
+        };
+        month_of(CalendarDay::new(year, month, 1).ok()?)
     }
 
     /// One picker's row: what it is, the picker under a name of its own, and the day the program holds as figures.
@@ -184,7 +243,7 @@ mod shown {
                     .width(LABEL)
                     .vertical_alignment(VerticalAlignment::Center),
                 CalendarDatePicker::new()
-                    .days(days.any, ..)
+                    .days(days.any)
                     .on_day_changed(messages.callback(Message::Any))
                     .min_width(40.0)
                     .width(40.0)
@@ -196,16 +255,14 @@ mod shown {
     fn view(days: &Days, messages: &Messages<Message>) -> Window {
         let any = CalendarDatePicker::new()
             .placeholder_text("No day")
-            .days(days.any, ..)
+            .days(days.any)
             .today(days.today)
             .on_day_changed(messages.callback(Message::Any));
-        let of_month = CalendarDatePicker::new().placeholder_text("No day");
-        let of_month = match days.month {
-            Some((first, last)) => of_month.days(days.of_month, first..=last),
-            None => of_month.days(days.of_month, ..),
-        }
-        .today(days.today)
-        .on_day_changed(messages.callback(Message::OfMonth));
+        let of_month = CalendarDatePicker::new()
+            .placeholder_text("No day")
+            .days(days.offered().0)
+            .today(days.today)
+            .on_day_changed(messages.callback(Message::OfMonth));
         let content = StackPanel::new().spacing(12.0).children((
             row("Any day", "Pick any day", any, days.any),
             row(
@@ -220,6 +277,14 @@ mod shown {
                 .automation_name("Hold no day")
                 .on_click(messages.message(Message::HoldNone))
                 .content("Hold no day"),
+            Button::new()
+                .automation_name("Hold a day before the month")
+                .on_click(messages.message(Message::HoldBefore))
+                .content("Hold a day before the month"),
+            Button::new()
+                .automation_name("Move the month on")
+                .on_click(messages.message(Message::MonthOn))
+                .content("Move the month on"),
         ));
         let content = Border::new()
             .background(ThemeBrush::SolidBackground)
