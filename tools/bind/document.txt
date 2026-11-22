@@ -1,0 +1,44 @@
+// What Pamba's Windows layer calls of the web view's core, for a document shown inert and printed. One filter to a
+// line. A member this file does not name is left unbound. Every type of another namespace that a named member's
+// signature uses is named too: the generator leaves a member unbound, and says nothing, where one is missing. A
+// member an interface does not hold stops the generator with its name.
+
+// The core: where it is sent, what it is told to refuse, what it reports, and its printing.
+Microsoft.Web.WebView2.Core.ICoreWebView2::{get_Settings, Navigate, add_NavigationStarting, remove_NavigationStarting, add_FrameNavigationStarting, remove_FrameNavigationStarting, add_NavigationCompleted, remove_NavigationCompleted, add_NewWindowRequested, remove_NewWindowRequested, add_PermissionRequested, remove_PermissionRequested, add_ProcessFailed, remove_ProcessFailed, add_WebResourceRequested, remove_WebResourceRequested}
+Microsoft.Web.WebView2.Core.ICoreWebView2_Manual::AddWebResourceRequestedFilter
+Microsoft.Web.WebView2.Core.ICoreWebView2_2::get_Environment
+Microsoft.Web.WebView2.Core.ICoreWebView2_4::{add_DownloadStarting, remove_DownloadStarting}
+Microsoft.Web.WebView2.Core.ICoreWebView2_16::{PrintAsync, ShowPrintUI}
+Microsoft.Web.WebView2.Core.ICoreWebView2_18::{add_LaunchingExternalUriScheme, remove_LaunchingExternalUriScheme}
+
+// The settings that make a view inert.
+Microsoft.Web.WebView2.Core.ICoreWebView2Settings::{put_IsScriptEnabled, put_IsWebMessageEnabled, put_AreHostObjectsAllowed, put_AreDevToolsEnabled, put_AreDefaultContextMenusEnabled, put_AreDefaultScriptDialogsEnabled, put_IsStatusBarEnabled, put_IsBuiltInErrorPageEnabled}
+Microsoft.Web.WebView2.Core.ICoreWebView2Settings3::put_AreBrowserAcceleratorKeysEnabled
+Microsoft.Web.WebView2.Core.ICoreWebView2Settings4::{put_IsGeneralAutofillEnabled, put_IsPasswordAutosaveEnabled}
+Microsoft.Web.WebView2.Core.ICoreWebView2Settings6::put_IsSwipeNavigationEnabled
+Microsoft.Web.WebView2.Core.ICoreWebView2Settings8::put_IsReputationCheckingRequired
+
+// The environment: an answer made from memory, and a print's settings.
+Microsoft.Web.WebView2.Core.ICoreWebView2Environment::CreateWebResourceResponse
+Microsoft.Web.WebView2.Core.ICoreWebView2Environment6::CreatePrintSettings
+Microsoft.Web.WebView2.Core.ICoreWebView2PrintSettings::put_ShouldPrintHeaderAndFooter
+Microsoft.Web.WebView2.Core.ICoreWebView2PrintSettings2::put_PrinterName
+
+// What each event hands its handler.
+Microsoft.Web.WebView2.Core.ICoreWebView2NavigationStartingEventArgs::{get_Uri, put_Cancel, get_NavigationId}
+Microsoft.Web.WebView2.Core.ICoreWebView2NavigationCompletedEventArgs::{get_IsSuccess, get_WebErrorStatus, get_NavigationId}
+Microsoft.Web.WebView2.Core.ICoreWebView2NewWindowRequestedEventArgs::put_Handled
+Microsoft.Web.WebView2.Core.ICoreWebView2PermissionRequestedEventArgs::put_State
+Microsoft.Web.WebView2.Core.ICoreWebView2DownloadStartingEventArgs::put_Cancel
+Microsoft.Web.WebView2.Core.ICoreWebView2LaunchingExternalUriSchemeEventArgs::put_Cancel
+Microsoft.Web.WebView2.Core.ICoreWebView2WebResourceRequestedEventArgs::{get_Request, put_Response}
+Microsoft.Web.WebView2.Core.ICoreWebView2WebResourceRequest::get_Uri
+Microsoft.Web.WebView2.Core.ICoreWebView2ProcessFailedEventArgs::get_ProcessFailedKind
+
+// Windows' own: an event's handler, and a stream made from bytes held in memory.
+Windows.Foundation.TypedEventHandler
+Windows.Storage.Streams.InMemoryRandomAccessStream
+Windows.Storage.Streams.IRandomAccessStream::CloneStream
+Windows.Storage.Streams.IOutputStream::WriteAsync
+Windows.Storage.Streams.IBuffer
+Windows.Security.Cryptography.CryptographicBuffer::CreateFromByteArray

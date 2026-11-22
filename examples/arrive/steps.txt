@@ -1,0 +1,32 @@
+wait 1500
+front arrive
+wait 600
+focus
+press Answer
+wait 1500
+rect The answer has arrived
+focus
+press Answer
+wait 1500
+press Tall
+wait 1500
+rect The tall place's head
+rect The tall place's foot
+move 600 460
+wheel -3
+wait 1000
+rect The tall place's head
+press Tall
+wait 1500
+rect The tall place's head
+press Inner
+wait 1500
+rect The inner place
+press Answer in the field
+wait 1500
+focus
+rect The answer has arrived
+press Missing
+wait 1500
+rect The answer has arrived
+focus

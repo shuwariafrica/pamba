@@ -41,6 +41,9 @@ struct Named {
     pause: Rc<dyn Fn()>,
 }
 
+/// What follows Windows' answer to the keyboard's ask once a drawing stands: taken once.
+type Then = Rc<RefCell<Option<Box<dyn FnOnce()>>>>;
+
 /// What follows Windows' answer to an ask.
 enum Next {
     /// The control is asked once more, now.
@@ -91,20 +94,36 @@ pub(crate) fn drawing<T>(draw: impl FnOnce() -> T) -> (T, u64) {
 }
 
 /// Carries out the newest ask, where one waits for this drawing: the control the drawing gave
-/// that name is asked to take the keyboard.
-pub(crate) fn carry_out() {
+/// that name is asked to take the keyboard. `then` follows Windows' answer to the ask, whichever
+/// it is, and follows at once where no ask is made.
+pub(crate) fn carry_out(then: impl FnOnce() + 'static) {
     let asked = NAMED.with_borrow_mut(|named| {
         let named = named.as_mut()?;
         let control = named.places.take_asked()?;
         Some((control, named.taken))
     });
-    if let Some((control, taken)) = asked {
-        let again = control.clone();
-        // Where the control is not on the screen the ask is not even queued, and there is nothing
-        // to hear of.
-        let _ = control.request_focus_result(move |answer| {
-            answered(&again, taken, matches!(answer, Ok(true)));
-        });
+    let Some((control, taken)) = asked else {
+        then();
+        return;
+    };
+    // Shared with the answer, which the reactor may call more than once and may never call.
+    let then: Then = Rc::new(RefCell::new(Some(Box::new(then))));
+    let after = Rc::clone(&then);
+    let again = control.clone();
+    let queued = control.request_focus_result(move |answer| {
+        answered(&again, taken, matches!(answer, Ok(true)));
+        let then = after.borrow_mut().take();
+        if let Some(then) = then {
+            then();
+        }
+    });
+    // Where the control is not on the screen the ask is not even queued, and there is no answer
+    // to follow.
+    if !queued {
+        let then = then.borrow_mut().take();
+        if let Some(then) = then {
+            then();
+        }
     }
 }
 

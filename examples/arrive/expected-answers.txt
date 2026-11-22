@@ -1,0 +1,12 @@
+focus: "Answer" ControlType.Button Button
+rect: "The answer has arrived" inside the window, on the screen
+focus: "Answer" ControlType.Button Button
+rect: "The tall place's head" inside the window, on the screen
+rect: "The tall place's foot" outside the window, off the screen
+rect: "The tall place's head" outside the window, off the screen
+rect: "The tall place's head" inside the window, on the screen
+rect: "The inner place" inside the window, on the screen
+focus: "The field" ControlType.Edit TextBox
+rect: "The answer has arrived" inside the window, on the screen
+rect: "The answer has arrived" inside the window, on the screen
+focus: "Missing" ControlType.Button Button

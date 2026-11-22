@@ -1,0 +1,12 @@
+focus: "Answer" ControlType.Button
+focus: "" ControlType.Pane
+notification: "The answer has arrived" kind Other processing All activity "pamba.announce"
+notification: "The answer has arrived" kind Other processing All activity "pamba.announce"
+focus: "Tall" ControlType.Button
+focus: "Inner" ControlType.Button
+notification: "The inner answer has arrived" kind Other processing All activity "pamba.announce"
+focus: "Answer in the field" ControlType.Button
+focus: "The field" ControlType.Edit
+notification: "The answer has arrived" kind Other processing All activity "pamba.announce"
+focus: "Missing" ControlType.Button
+done

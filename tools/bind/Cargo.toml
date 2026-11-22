@@ -1,0 +1,16 @@
+[package]
+name = "bind"
+description = "Writes the bindings Pamba's Windows layer holds for what the reactor does not reach"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+sha2 = { version = "0.11.1", default-features = false }
+windows-bindgen.workspace = true
+
+[lints]
+workspace = true

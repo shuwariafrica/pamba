@@ -11,6 +11,7 @@ use windows_reactor::{
     LocalSender, RoutedCallback, View, ViewContext,
 };
 
+use crate::arrive;
 use crate::beside;
 use crate::named;
 use crate::threads::Threads;
@@ -175,6 +176,7 @@ where
             // Refused only once the window has gone, and its names with it.
             let _ = sender.send(Event::Pause);
         });
+        arrive::stands();
         let running = Loop::start(parts.program, parts.effects, parts.performer, dispatcher);
         Self::wait(&threads, context);
         // What Pamba reaches through Windows beside the reactor is reached for this window.
@@ -215,14 +217,15 @@ where
         let messages = Messages {
             sender: context.sender(),
         };
-        let (window, asks) = named::drawing(|| (self.view)(self.running.program(), &messages));
-        // The reactor runs this once this drawing stands, with every control it names in place,
-        // and only where an ask was made since the drawing before.
+        let ((window, asks), arrivals) =
+            arrive::drawing(|| named::drawing(|| (self.view)(self.running.program(), &messages)));
+        // The reactor runs this once this drawing stands, with every control and place it names
+        // in place, and only where an ask of either was made since the drawing before.
         context.use_effect(
             "pamba-windows: what was asked of a named control",
-            asks,
+            (asks, arrivals),
             || {
-                named::carry_out();
+                arrive::carry_out();
                 None
             },
         );
@@ -261,6 +264,7 @@ impl<P: Program, W: Performer<P>, V> Drop for Host<P, W, V> {
         beside::gone();
         watch::gone();
         named::gone();
+        arrive::gone();
         self.threads.end();
     }
 }
