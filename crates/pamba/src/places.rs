@@ -102,23 +102,66 @@ struct Held<R> {
 /// assert_eq!(places.take_asked(), Some(pay));
 /// assert_eq!(places.take_asked(), None);
 /// ```
+///
+/// A platform may be unable to carry an ask out at once: the place is drawn, and the platform
+/// shows it a moment later, as it shows what a person has just opened. A drawer on such a
+/// platform makes its places [with retries](Self::with_retries), and where the platform cannot
+/// carry out the ask it took, it retries after a pause of its own choosing:
+///
+/// ```
+/// use pamba::Places;
+///
+/// let mut places = Places::with_retries(2);
+/// places.ask("the field in what she opened");
+/// places.begin();
+/// let field = places.named("the field in what she opened", || "the control");
+/// places.end();
+/// assert_eq!(places.take_asked(), Some(field));
+/// // The platform cannot stand the keyboard there yet: the ask is kept, and after a pause it is
+/// // taken again, by its name in the newest drawing.
+/// assert!(places.retry_later());
+/// assert_eq!(places.take_retry(), Some(field));
+/// ```
 pub struct Places<R> {
     held: HashMap<Kept, Held<R>>,
     /// The drawing being made, or the last one made.
     drawing: u64,
     asked: Option<Kept>,
     asks: u64,
+    /// How many times an ask the platform cannot carry out yet is retried.
+    retries: u8,
+    /// The ask last taken, while it may still be retried.
+    taken: Option<Taken>,
+}
+
+/// An ask that was taken and may still be retried.
+struct Taken {
+    name: Kept,
+    /// How many more times it may be retried.
+    left: u8,
+    /// Whether a retry waits to be taken.
+    waits: bool,
 }
 
 impl<R> Places<R> {
-    /// No place named, and nothing asked.
+    /// No place named, and nothing asked. An ask is carried out once: for a platform whose
+    /// places can always take what is asked of them.
     #[must_use]
     pub fn new() -> Self {
+        Self::with_retries(0)
+    }
+
+    /// No place named, and nothing asked, for a platform that cannot always carry an ask out at
+    /// once: an ask it cannot carry out yet is [retried](Self::retry_later) up to `times` times.
+    #[must_use]
+    pub fn with_retries(times: u8) -> Self {
         Self {
             held: HashMap::new(),
             drawing: 0,
             asked: None,
             asks: 0,
+            retries: times,
+            taken: None,
         }
     }
 
@@ -158,10 +201,12 @@ impl<R> Places<R> {
         self.held.retain(|_, held| held.drawn == drawing);
     }
 
-    /// The program asks for the place called `name`. It replaces an ask not yet taken.
+    /// The program asks for the place called `name`. It replaces an ask not yet taken, and ends
+    /// the retrying of the ask before it.
     pub fn ask<K: Hash + Eq + 'static>(&mut self, name: K) {
         self.asked = Some(Kept(Box::new(name)));
         self.asks += 1;
+        self.taken = None;
     }
 
     /// How many asks have been made: it changes exactly when there is a new ask to carry out, so
@@ -185,7 +230,60 @@ impl<R> Places<R> {
         R: Clone,
     {
         let asked = self.asked.take()?;
-        self.held.get(&*asked.0).map(|held| held.reference.clone())
+        let reference = self.held.get(&*asked.0).map(|held| held.reference.clone());
+        self.taken = reference.is_some().then_some(Taken {
+            name: asked,
+            left: self.retries,
+            waits: false,
+        });
+        reference
+    }
+
+    /// The platform could not carry out the ask last taken: what the ask names is drawn, and
+    /// cannot take what is asked of it yet. Keeps the ask to be retried and gives `true`; the
+    /// drawer then pauses for as long as its platform needs and [takes it](Self::take_retry).
+    ///
+    /// Gives `false` where the ask is done with: it has been retried as often as these places
+    /// retry one, the program has asked for another place since, or the drawer
+    /// [gave it up](Self::give_up).
+    pub fn retry_later(&mut self) -> bool {
+        match &mut self.taken {
+            Some(taken) if taken.left > 0 => {
+                taken.left -= 1;
+                taken.waits = true;
+                true
+            }
+            _ => {
+                self.taken = None;
+                false
+            }
+        }
+    }
+
+    /// Takes the retry that waits, once, and gives the reference the newest drawing has for the
+    /// ask's name: a drawing made since may have given the name to another thing. Where the
+    /// newest drawing gives no such name the ask comes to nothing and is done with.
+    pub fn take_retry(&mut self) -> Option<R>
+    where
+        R: Clone,
+    {
+        let taken = self.taken.as_mut().filter(|taken| taken.waits)?;
+        taken.waits = false;
+        let reference = self
+            .held
+            .get(&*taken.name.0)
+            .map(|held| held.reference.clone());
+        if reference.is_none() {
+            self.taken = None;
+        }
+        reference
+    }
+
+    /// The drawer gives up the ask last taken: it is not retried, and a retry that waits is
+    /// dropped. A drawer does so where the person has gone elsewhere by her own hand, since she
+    /// is no longer where the step left her.
+    pub fn give_up(&mut self) {
+        self.taken = None;
     }
 }
 

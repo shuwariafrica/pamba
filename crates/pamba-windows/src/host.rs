@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use pamba::{Loop, Performer, Program};
 use windows_reactor::{
-    App, Border, Callback, Component, ComponentContext, FocusEventInfo, LocalSender,
-    RoutedCallback, View, ViewContext,
+    App, Border, Callback, Component, ComponentContext, ComponentTimer, FocusEventInfo,
+    LocalSender, RoutedCallback, View, ViewContext,
 };
 
 use crate::beside;
@@ -93,6 +93,11 @@ pub(crate) enum Event<M> {
     Woken,
     /// The window stands.
     Opened,
+    /// Windows refused the keyboard to a named control it does not show yet: the ask is made
+    /// again after a pause.
+    Pause,
+    /// That pause is over.
+    Paused,
 }
 
 struct Parts<P: Program, W, V> {
@@ -125,6 +130,9 @@ struct Host<P: Program, W: Performer<P>, V> {
     /// Told whenever a control of the window takes the keyboard; the same callback at every
     /// drawing.
     took: Callback<FocusEventInfo>,
+    /// The pause before a refused ask of a named control is made again, while it runs: dropped,
+    /// it is cancelled.
+    pause: Option<ComponentTimer>,
 }
 
 impl<P, W, V> Host<P, W, V>
@@ -162,7 +170,11 @@ where
         let dispatcher: Arc<dyn pamba::Dispatcher> = threads.clone();
         // Before the loop starts: an effect of the program's construction may ask where the
         // keyboard stands at the start.
-        named::stands();
+        let sender = context.sender();
+        named::stands(move || {
+            // Refused only once the window has gone, and its names with it.
+            let _ = sender.send(Event::Pause);
+        });
         let running = Loop::start(parts.program, parts.effects, parts.performer, dispatcher);
         Self::wait(&threads, context);
         // What Pamba reaches through Windows beside the reactor is reached for this window.
@@ -176,6 +188,7 @@ where
             view: parts.view,
             threads,
             took: Callback::new(|_: FocusEventInfo| named::took()),
+            pause: None,
         }
     }
 
@@ -187,6 +200,14 @@ where
                 Self::wait(&self.threads, context);
             }
             Event::Opened => {}
+            // One ask is retried at a time: a pause still running is for an ask since replaced.
+            Event::Pause => {
+                self.pause = Some(context.set_timeout(named::PAUSE, Event::Paused));
+            }
+            Event::Paused => {
+                self.pause = None;
+                named::retry();
+            }
         }
     }
 

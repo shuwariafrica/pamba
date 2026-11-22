@@ -8,6 +8,14 @@
 //! appearance through `Window::on_appearance`, at the start and whenever it changes, keeps it,
 //! and draws with it.
 //!
+//! The accent is the one colour here that is the person's own, so no colour can be stated for
+//! it. [`Appearance::accent`] gives it as the ground of a filled mark together with the words
+//! that stand on it, because the two are only right as a pair: under a contrast theme Windows
+//! puts the window's own colour in the accent's place (`AccentFillColorDefaultBrush`, which
+//! `ThemeBrush::Accent` names), and its own filled marks, the accent button and today in its
+//! calendar, take the theme's pair for what is selected instead (`Button_themeresources.xaml`,
+//! `CalendarView_themeresources.xaml`).
+//!
 //! The colours are Windows' own, as WinUI's theme resources state them
 //! (`microsoft-ui-xaml`, `Common_themeresources_any.xaml`): each member's line names its
 //! resource there.
@@ -63,6 +71,20 @@ pub enum FillColor {
     SolidBackgroundSecondary,
     /// The window's ground, one step forward.
     SolidBackgroundTertiary,
+}
+
+/// Windows' accent as the ground of a filled mark, with the words that stand on it: a count on
+/// a disc, today's number in a row of days.
+///
+/// Draw the mark's ground with `fill` and what is written on it with `words`. A mark filled
+/// with `ThemeBrush::Accent` itself cannot be seen under a contrast theme, where that brush is
+/// the window's own colour.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Accent {
+    /// The mark's ground.
+    pub fill: Brush,
+    /// What is written on that ground.
+    pub words: Brush,
 }
 
 /// What a colour is for, which decides what a contrast theme puts in its place.
@@ -198,6 +220,28 @@ impl Appearance {
             (Self::Contrast(theme), Role::Inactive) => Brush::Solid(theme.inactive),
         }
     }
+
+    /// The accent as the ground of a filled mark, and the words on it, as Windows draws its own
+    /// filled marks now: the person's accent beneath Windows' colour for words on it
+    /// (`TextOnAccentFillColorPrimary`, white in her light colours and black in her dark ones),
+    /// and under a contrast theme the theme's own pair for what is selected.
+    #[must_use]
+    pub const fn accent(self) -> Accent {
+        match self {
+            Self::Light => Accent {
+                fill: Brush::Theme(ThemeBrush::Accent),
+                words: Brush::Solid(Color::rgb(0xFF, 0xFF, 0xFF)),
+            },
+            Self::Dark => Accent {
+                fill: Brush::Theme(ThemeBrush::Accent),
+                words: Brush::Solid(Color::rgb(0x00, 0x00, 0x00)),
+            },
+            Self::Contrast(theme) => Accent {
+                fill: Brush::Solid(theme.selected),
+                words: Brush::Solid(theme.selected_words),
+            },
+        }
+    }
 }
 
 #[cfg(test)]
@@ -207,9 +251,11 @@ mod tests {
     /// The two appearances in which Windows' own colours for a mode are drawn.
     const MODES: [Appearance; 2] = [Appearance::Light, Appearance::Dark];
 
-    /// A contrast theme whose colour for inactive words is no colour Windows states for a mode.
+    /// A contrast theme none of whose colours is one Windows states for a mode.
     const THEMED: Appearance = Appearance::Contrast(Contrast {
         inactive: Color::rgb(0x3F, 0xF2, 0x3F),
+        selected: Color::rgb(0x1A, 0xEB, 0xFF),
+        selected_words: Color::rgb(0x37, 0x00, 0x6E),
     });
 
     /// The window's own ground in each mode, as Windows states `SolidBackgroundFillColorBase`.
@@ -292,6 +338,44 @@ mod tests {
             );
             assert_ne!(light, dark, "{colour:?} is one colour in both modes");
         }
+    }
+
+    #[test]
+    fn the_accent_as_a_fill_carries_windows_own_words_in_each_mode() {
+        let light = Appearance::Light.accent();
+        let dark = Appearance::Dark.accent();
+
+        assert_eq!(light.fill, Brush::Theme(ThemeBrush::Accent));
+        assert_eq!(dark.fill, Brush::Theme(ThemeBrush::Accent));
+        assert_eq!(
+            light.words,
+            Brush::Solid(Color::rgb(0xFF, 0xFF, 0xFF)),
+            "words on the accent in the light mode"
+        );
+        assert_eq!(
+            dark.words,
+            Brush::Solid(Color::rgb(0x00, 0x00, 0x00)),
+            "words on the accent in the dark mode"
+        );
+    }
+
+    #[test]
+    fn under_a_contrast_theme_the_accent_as_a_fill_is_the_themes_pair_for_what_is_selected() {
+        let Appearance::Contrast(theme) = THEMED else {
+            unreachable!()
+        };
+        let accent = THEMED.accent();
+
+        assert_eq!(
+            accent.fill,
+            Brush::Solid(theme.selected),
+            "the mark's ground is not the theme's colour beneath what is selected"
+        );
+        assert_eq!(
+            accent.words,
+            Brush::Solid(theme.selected_words),
+            "the mark's words are not the theme's words for what is selected"
+        );
     }
 
     #[test]

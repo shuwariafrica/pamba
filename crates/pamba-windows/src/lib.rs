@@ -20,6 +20,7 @@ mod appearance;
 mod beside;
 mod clipboard;
 mod contrast;
+mod days;
 mod host;
 mod named;
 mod tell;
