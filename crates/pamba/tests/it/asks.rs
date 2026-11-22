@@ -87,3 +87,20 @@ fn each_ask_is_counted_and_taking_them_counts_nothing() {
         "taking the asks changed how many were made"
     );
 }
+
+#[test]
+fn an_ask_of_a_name_given_to_a_control_and_a_place_is_taken_with_the_controls_reference() {
+    let (mut places, mut asks) = (Places::new(), Asks::new());
+
+    asks.ask(Paper::Receipt, "print");
+    places.begin();
+    places.place(Paper::Receipt, || 3);
+    places.named(Paper::Receipt, || 7);
+    places.end();
+
+    assert_eq!(
+        asks.take(&places),
+        [(Some(7), "print")],
+        "the place's reference was given over the control's"
+    );
+}

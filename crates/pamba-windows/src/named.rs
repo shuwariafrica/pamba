@@ -1,9 +1,13 @@
-//! The controls a drawing names, and the keyboard stood at one of them.
+//! The controls and places a drawing names, and the keyboard stood at one of them.
 //!
 //! A program's logic names no control: it asks, as an effect, for the keyboard to stand at a place
-//! of its own naming. The drawing gives that name to a control, and the ask is carried out once
-//! the drawing that follows the step stands, since that drawing may be the one that first shows
-//! the control. The names are kept for the window that stands on this thread.
+//! of its own naming. The drawing gives that name to a control, or to a place round a part of the
+//! window, and the ask is carried out once the drawing that follows the step stands, since that
+//! drawing may be the one that first shows it. Which of a control and a place is asked is the
+//! loop's rule, kept by [`Places`]. Asked the keyboard, a place's border passes the ask to the
+//! first control inside it that can take it (`microsoft-ui-xaml`, `focusmgr.cpp`,
+//! `SetFocusedElement`), so a place reaches a control the reactor gives no reference, such as its
+//! date picker. The names are kept for the window that stands on this thread.
 //!
 //! Windows does not always show a control in the drawing that holds it. What an expander holds
 //! stays collapsed until the expander's opening begins, and that is after the expander has
@@ -82,7 +86,7 @@ pub(crate) fn drawing<T>(draw: impl FnOnce() -> T) -> (T, u64) {
             named.places.begin();
         }
     });
-    // Not borrowed while the program draws: its drawing calls `named`.
+    // Not borrowed while the program draws: its drawing calls `named` and `place`.
     let drawn = draw();
     let asks = NAMED.with_borrow_mut(|named| {
         named.as_mut().map_or(0, |named| {
@@ -93,9 +97,9 @@ pub(crate) fn drawing<T>(draw: impl FnOnce() -> T) -> (T, u64) {
     (drawn, asks)
 }
 
-/// Carries out the newest ask, where one waits for this drawing: the control the drawing gave
-/// that name is asked to take the keyboard. `then` follows Windows' answer to the ask, whichever
-/// it is, and follows at once where no ask is made.
+/// Carries out the newest ask, where one waits for this drawing: the control the drawing gave that
+/// name is asked to take the keyboard, else the place. `then` follows Windows' answer to the ask,
+/// whichever it is, and follows at once where no ask is made.
 pub(crate) fn carry_out(then: impl FnOnce() + 'static) {
     let asked = NAMED.with_borrow_mut(|named| {
         let named = named.as_mut()?;
@@ -130,8 +134,7 @@ pub(crate) fn carry_out(then: impl FnOnce() + 'static) {
 /// Windows has answered an ask: the control took the keyboard, or it did not. An ask refused
 /// before any control of the window had held the keyboard was made before the window's content
 /// could take it: it is made once more when the content can. An ask refused after that names a
-/// control Windows does not show yet: it is made again after a pause, as often as the places
-/// retry one.
+/// control Windows does not show yet: it is made again after a pause, [`RETRIES`] times at most.
 fn answered(control: &ElementRef, taken_when_asked: bool, took: bool) {
     let next = NAMED.with_borrow_mut(|named| {
         let named = named.as_mut()?;
@@ -166,7 +169,7 @@ fn answered(control: &ElementRef, taken_when_asked: bool, took: bool) {
 }
 
 /// The pause after a refused ask is over: the ask is made again, of the control the newest
-/// drawing gives its name.
+/// drawing gives its name, else the place.
 pub(crate) fn retry() {
     let control = NAMED.with_borrow_mut(|named| named.as_mut()?.places.take_retry());
     if let Some(control) = control {
@@ -198,7 +201,8 @@ pub(crate) fn took() {
 /// The name is the program's own: any value that can be compared and hashed, such as a case of an
 /// enum of the places its logic speaks of. The control keeps the name for as long as each drawing
 /// gives it. A drawing gives one name to one control: given to two, it stands for one of them
-/// only.
+/// only. The same name may also be given to a [`place`](crate::place), and [`focus`] then asks the
+/// control.
 ///
 /// Called while no window of the program is being drawn, it gives a reference that stands for no
 /// control.
@@ -225,25 +229,56 @@ pub fn named<K: Hash + Eq + 'static>(name: K) -> ElementRef {
     })
 }
 
-/// Asks for the keyboard to stand at the control the drawing calls `name`: what a program's
-/// effect comes to where its logic, having answered something the person did, says where she
-/// goes on from.
+/// The reference a place's border carries for the place this drawing calls `name`; one that
+/// stands for nothing while no window of the program is being drawn.
+pub(crate) fn place<K: Hash + Eq + 'static>(name: K) -> ElementRef {
+    NAMED.with_borrow_mut(|named| match named {
+        Some(named) => named.places.place(name, ElementRef::new),
+        None => ElementRef::new(),
+    })
+}
+
+/// Asks for the keyboard to stand at what the drawing calls `name`: what a program's effect comes
+/// to where its logic, having answered something the person did, says where she goes on from.
+///
+/// Where the drawing gives the name to a control with [`named`], that control is asked. Where it
+/// gives the name to no control and to a [`place`](crate::place), the keyboard goes to the first
+/// control inside the place that takes it, in Windows' own order: a place reaches a control the
+/// layer gives no reference, such as [`CalendarDatePicker`](crate::ui::CalendarDatePicker), and a
+/// part of the window whose first control is the drawing's to decide.
 ///
 /// Called while an effect is performed, on the window's thread. It is carried out once the
-/// drawing that follows the step stands, so the control may be one that drawing shows for the
-/// first time. An ask made as the program starts, by an effect of its construction, is carried
-/// out when the window's content first takes the keyboard. Of several asks in one step the last
-/// is carried out.
+/// drawing that follows the step stands, so the control or the place may be one that drawing
+/// shows for the first time. An ask made as the program starts, by an effect of its
+/// construction, is carried out when the window's content first takes the keyboard. Of several
+/// asks in one step the last is carried out. An ask of a place whose control already holds the
+/// keyboard leaves it there.
 ///
 /// The control may also be one Windows shows a moment after the step, as it shows what an
 /// expander holds once the expander's opening begins. Windows refuses the keyboard to a control
-/// it does not show, so a refused ask is made again 40 milliseconds later, six times at most.
-/// It is given up as soon as any control takes the keyboard, since the person has then put it
-/// somewhere herself, and when the program asks for another place.
+/// it does not show, so a refused ask is made again 40 milliseconds later, six times at most, of
+/// what the newest drawing then gives the name. It is given up as soon as any control takes the
+/// keyboard, since the person has then put it somewhere herself, and when the program asks for
+/// another place.
 ///
 /// The keyboard stays where it is where no window of the program stands on this thread, where the
-/// drawing gives no control that name, and where the control cannot take the keyboard within
-/// that time.
+/// drawing gives the name to nothing, where a place holds nothing that takes the keyboard, and
+/// where nothing asked can take it within that time.
+///
+/// ```no_run
+/// use pamba_windows::ui::CalendarDatePicker;
+///
+/// #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+/// enum Place {
+///     Expiry,
+/// }
+///
+/// // In the drawing: a day's control, which takes no name of its own, in a place.
+/// let expiry = pamba_windows::place(Place::Expiry, CalendarDatePicker::new());
+///
+/// // Where the program's effect is performed: the keyboard goes to the day's control.
+/// pamba_windows::focus(Place::Expiry);
+/// ```
 pub fn focus<K: Hash + Eq + 'static>(name: K) {
     NAMED.with_borrow_mut(|named| {
         if let Some(named) = named {

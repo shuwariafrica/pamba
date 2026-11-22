@@ -1,0 +1,8 @@
+focus: "Ask the day" ControlType.Button Button
+focus: "The day" ControlType.Button CalendarDatePicker
+focus: "Ask the words" ControlType.Button Button
+focus: "After the disabled" ControlType.Edit TextBox
+focus: "The field" ControlType.Edit TextBox
+focus: "The named field" ControlType.Edit TextBox
+focus: "Inside the expander" ControlType.Edit TextBox
+focus: "The new field" ControlType.Edit TextBox

@@ -1,0 +1,14 @@
+[package]
+name = "pamba-host"
+description = "What a native program asks of the computer it runs on, with no window and no drawing: on every platform, each by that platform's own means"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories = ["os", "os::windows-apis"]
+readme = "../../README.md"
+
+[lints]
+workspace = true

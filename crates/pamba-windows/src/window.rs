@@ -4,6 +4,9 @@ use crate::appearance::Appearance;
 use crate::unfilled::Unfilled;
 
 /// One window as a program's present state has it: what it holds, and what it says of itself.
+///
+/// A pointer's press moves the keyboard only onto something that takes it: a press on the ground,
+/// on words or on the title band leaves the keyboard where it stood.
 #[derive(Debug)]
 pub struct Window {
     pub(crate) content: View,
@@ -81,7 +84,7 @@ impl Window {
     ///
     /// // A program that keeps its own log writes the line there.
     /// let window = Window::new(TextBlock::new().text("Ready"))
-    ///     .on_unfilled(Callback::new(|told| eprintln!("the window opened unfilled: {told:?}")));
+    ///     .on_unfilled(Callback::new(|told| eprintln!("the window opened unfilled: {told}")));
     /// # drop(window);
     /// ```
     #[must_use]

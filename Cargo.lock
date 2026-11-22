@@ -108,6 +108,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "inside"
+version = "0.4.0"
+dependencies = [
+ "pamba",
+ "pamba-windows",
+ "pamba-windows-build",
+]
+
+[[package]]
+name = "keep"
+version = "0.4.0"
+dependencies = [
+ "pamba",
+ "pamba-windows",
+ "pamba-windows-build",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -115,6 +133,10 @@ checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
 name = "pamba"
+version = "0.4.0"
+
+[[package]]
+name = "pamba-host"
 version = "0.4.0"
 
 [[package]]
@@ -133,6 +155,15 @@ name = "pamba-windows-build"
 version = "0.4.0"
 dependencies = [
  "sha2",
+]
+
+[[package]]
+name = "presses"
+version = "0.4.0"
+dependencies = [
+ "pamba",
+ "pamba-windows",
+ "pamba-windows-build",
 ]
 
 [[package]]
@@ -171,6 +202,13 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
+]
+
+[[package]]
+name = "switch"
+version = "0.4.0"
+dependencies = [
+ "pamba-host",
 ]
 
 [[package]]

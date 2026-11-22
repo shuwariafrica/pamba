@@ -14,26 +14,39 @@ carries over.
   effects as data; a `Performer` carries them out on one platform; a `Loop` runs the two on the
   thread that draws. `Manual` runs a program and its performer in a test with no window and no
   second thread. `Places` keeps, for a platform's layer, the places a program names from one
-  drawing to the next, and retries an ask the platform cannot carry out yet. `Sender::wrapping`
-  gives a part of a program a sender for its own messages, made from the whole's by a function.
+  drawing to the next, and retries an ask the platform cannot carry out yet. `Places::place` gives
+  a name to a place round part of a drawing as `Places::named` gives it to a control, and an ask of
+  a name the drawing gives to both goes to the control. `Sender::wrapping` gives a part of a
+  program a sender for its own messages, made from the whole's by a function.
+- `pamba-host`, what a program asks of the computer it runs on, with no window and no drawing, on
+  every platform. `session::switch_user` says once whether the computer offers to leave the screen
+  to another person: the act, `SwitchUser`, whose `now` leaves the screen and answers `Stayed`
+  where the platform refused, or `Unoffered`, which says why not. On Windows it is offered where the
+  administrator has not hidden switching and another person can sign in: more than one enabled
+  account, or a computer joined to a domain or to Entra.
 - `pamba-windows`, the Windows layer. `run` opens a program's window, drawn with WinUI 3 through
   Microsoft's `windows-reactor`, whose controls are all under `ui`. A moment after the window first
   stands, the layer checks that its content fills it, and where it does not, has Windows tell the
   window its size again. The check reads the size the content is laid out at as well as the size
-  of its child window, and `Window::on_unfilled` tells the program what it found and mended.
+  of its child window, and `Window::on_unfilled` tells the program what it found and mended, as
+  an `Unfilled` that says itself in one plain sentence for the program's log.
   `Messages` turns what a control
   reports into a message of the program's, and `Messages::routed` lets a program take a key or a
-  pointer for itself. `named` gives a control a name of the program's, and `focus` stands the
-  keyboard at it once the drawing after the step stands, asking again for a control Windows shows a
-  moment later, such as a field in an expander the person has just opened. `place` gives part of
-  the drawing a name of the program's as the place where an answer arrives: `bring_into_view`
-  moves every scrolling area it stands in as little as shows it, once the drawing after the step
-  stands, and `announce` says words to a screen reader without moving the keyboard. `copy` puts
-  text on the clipboard. `WindowThread` lets any thread ask work of the window's thread, which runs
-  it there with the window's `WindowHandle` once the window stands, and refuses with `Unrun` once
-  the window has gone. `WindowHandle::bring_forward` restores the window where it was minimised and
-  asks Windows for the foreground, and answers `Behind` where Windows keeps it behind. `tell` says a
-  word through Windows itself where WinUI could not start.
+  pointer for itself. A pointer's press moves the keyboard only onto something that takes it:
+  a press on the window's ground, on words or on its title band leaves the keyboard where it stood.
+  `named` gives a control a name of the program's, and `focus` stands the keyboard at it once the
+  drawing after the step stands, asking again for a control Windows shows a moment later, such as a
+  field in an expander the person has just opened. Where the drawing gives the name to no control
+  and to a `place`, `focus` stands the keyboard at the first control inside the place that takes it:
+  a date picker, or whichever control a part of the window holds first. `place` gives part of the
+  drawing a name of the program's as the place where an answer arrives: `bring_into_view` moves
+  every scrolling area it stands in as little as shows it, once the drawing after the step stands,
+  and `announce` says words to a screen reader without moving the keyboard. `copy` puts text on the
+  clipboard. `WindowThread` lets any thread ask work of the window's thread, which runs it there
+  with the window's `WindowHandle` once the window stands, and refuses with `Unrun` once the window
+  has gone. `WindowHandle::bring_forward` restores the window where it was minimised and asks
+  Windows for the foreground, and answers `Behind` where Windows keeps it behind. `tell` says a word
+  through Windows itself where WinUI could not start.
   `Window::on_appearance` tells a program how Windows draws now, the person's colour mode and her
   contrast theme, and `ui::FillColor` names thirteen colours of Windows' theme that
   `windows-reactor` does not, each resolved for that appearance by `Appearance::brush`.

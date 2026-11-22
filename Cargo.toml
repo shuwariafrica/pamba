@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/pamba", "crates/pamba-windows", "crates/pamba-windows-build", "examples/arrive", "examples/counter", "examples/days", "examples/fill", "examples/forward", "examples/reach", "examples/tones", "tools/bind"]
+members = ["crates/pamba", "crates/pamba-host", "crates/pamba-windows", "crates/pamba-windows-build", "examples/arrive", "examples/counter", "examples/days", "examples/fill", "examples/forward", "examples/inside", "examples/keep", "examples/presses", "examples/reach", "examples/switch", "examples/tones", "tools/bind"]
 
 [workspace.package]
 version = "0.4.0"
@@ -13,6 +13,7 @@ categories = ["gui"]
 
 [workspace.dependencies]
 pamba = { path = "crates/pamba", version = "0.4.0" }
+pamba-host = { path = "crates/pamba-host", version = "0.4.0" }
 pamba-windows = { path = "crates/pamba-windows", version = "0.4.0" }
 pamba-windows-build = { path = "crates/pamba-windows-build", version = "0.4.0" }
 # How Pamba takes its Windows layer. Microsoft publishes `windows-reactor` seldom and builds it daily, and what a

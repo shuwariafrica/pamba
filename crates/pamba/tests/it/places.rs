@@ -235,3 +235,173 @@ fn an_ask_for_a_place_that_is_not_drawn_is_never_retried() {
 
     assert!(!places.retry_later(), "an ask that came to nothing is kept");
 }
+
+/// What one drawing gives a name.
+#[derive(Clone, Copy)]
+enum Gives {
+    Control,
+    Place,
+    Both,
+    PlaceThenControl,
+    Nothing,
+}
+
+/// One drawing that gives `name` as `gives` says, and the references it got: the control's, then
+/// the place's.
+fn give(
+    places: &mut Places<u32>,
+    made: &Made,
+    name: Place,
+    gives: Gives,
+) -> (Option<u32>, Option<u32>) {
+    places.begin();
+    let got = match gives {
+        Gives::Control => (Some(places.named(name, || made.next())), None),
+        Gives::Place => (None, Some(places.place(name, || made.next()))),
+        Gives::Both => {
+            let control = places.named(name, || made.next());
+            (Some(control), Some(places.place(name, || made.next())))
+        }
+        Gives::PlaceThenControl => {
+            let place = places.place(name, || made.next());
+            (Some(places.named(name, || made.next())), Some(place))
+        }
+        Gives::Nothing => (None, None),
+    };
+    places.end();
+    got
+}
+
+#[test]
+fn a_name_given_to_a_control_alone_asks_the_control() {
+    let (mut places, made) = (Places::new(), Made::default());
+    places.ask(Place::Pay);
+    let (control, _) = give(&mut places, &made, Place::Pay, Gives::Control);
+
+    assert!(control.is_some());
+    assert_eq!(places.take_asked(), control);
+}
+
+#[test]
+fn a_name_given_to_a_place_alone_asks_the_place() {
+    let (mut places, made) = (Places::new(), Made::default());
+    places.ask(Place::Pay);
+    let (_, place) = give(&mut places, &made, Place::Pay, Gives::Place);
+
+    assert!(place.is_some());
+    assert_eq!(places.take_asked(), place);
+}
+
+#[test]
+fn a_name_given_to_a_control_and_a_place_asks_the_control_in_either_order_of_giving() {
+    for gives in [Gives::Both, Gives::PlaceThenControl] {
+        let (mut places, made) = (Places::new(), Made::default());
+        places.ask(Place::Pay);
+        let (control, place) = give(&mut places, &made, Place::Pay, gives);
+
+        assert_ne!(
+            control, place,
+            "the control and the place share a reference"
+        );
+        assert_eq!(
+            places.take_asked(),
+            control,
+            "the place was asked over the control"
+        );
+    }
+}
+
+#[test]
+fn a_name_the_newest_drawing_gives_to_nothing_asks_nothing() {
+    let (mut places, made) = (Places::with_retries(3), Made::default());
+    give(&mut places, &made, Place::Pay, Gives::Both);
+    places.ask(Place::Pay);
+    give(&mut places, &made, Place::Pay, Gives::Nothing);
+
+    assert_eq!(places.take_asked(), None);
+    assert!(
+        !places.retry_later(),
+        "an ask of nothing is kept to be retried"
+    );
+}
+
+#[test]
+fn the_newest_drawing_decides_whether_the_control_or_the_place_is_asked() {
+    let (mut places, made) = (Places::new(), Made::default());
+    give(&mut places, &made, Place::Pay, Gives::Both);
+    let (_, place) = give(&mut places, &made, Place::Pay, Gives::Place);
+    places.ask(Place::Pay);
+    assert_eq!(
+        places.take_asked(),
+        place,
+        "a control an earlier drawing gave was asked"
+    );
+
+    let (control, _) = give(&mut places, &made, Place::Pay, Gives::Control);
+    places.ask(Place::Pay);
+    assert_eq!(
+        places.take_asked(),
+        control,
+        "a place an earlier drawing gave was asked"
+    );
+}
+
+#[test]
+fn a_retry_settles_whether_the_control_or_the_place_is_asked_against_the_newest_drawing() {
+    let (mut places, made) = (Places::with_retries(3), Made::default());
+    places.ask(Place::Pay);
+    let (_, place) = give(&mut places, &made, Place::Pay, Gives::Place);
+    assert_eq!(places.take_asked(), place);
+
+    assert!(places.retry_later());
+    let (control, _) = give(&mut places, &made, Place::Pay, Gives::Both);
+    assert_eq!(
+        places.take_retry(),
+        control,
+        "the retry went to what the first drawing gave"
+    );
+
+    assert!(places.retry_later());
+    give(&mut places, &made, Place::Pay, Gives::Nothing);
+    assert_eq!(places.take_retry(), None);
+}
+
+#[test]
+fn an_ask_of_a_place_is_retried_as_often_as_the_drawer_said_and_no_more() {
+    let (mut places, made) = (Places::with_retries(2), Made::default());
+    places.ask(Place::Pay);
+    let (_, place) = give(&mut places, &made, Place::Pay, Gives::Place);
+    assert_eq!(places.take_asked(), place);
+
+    let mut retried = 0;
+    while places.retry_later() {
+        retried += 1;
+        assert!(
+            retried <= 2,
+            "the ask of a place is retried a third time of two"
+        );
+        assert_eq!(places.take_retry(), place);
+    }
+
+    assert_eq!(retried, 2);
+}
+
+#[test]
+fn each_kind_keeps_its_reference_while_each_drawing_gives_it_and_takes_a_new_one_after_a_gap() {
+    let (mut places, made) = (Places::new(), Made::default());
+    let first = give(&mut places, &made, Place::Find, Gives::Both);
+    assert_eq!(
+        give(&mut places, &made, Place::Find, Gives::Both),
+        first,
+        "a reference changed between drawings that each gave it"
+    );
+
+    let (_, place) = give(&mut places, &made, Place::Find, Gives::Place);
+    assert_eq!(place, first.1, "the place lost its reference while given");
+    let (control, again) = give(&mut places, &made, Place::Find, Gives::Both);
+    assert_ne!(
+        control, first.0,
+        "a control a drawing left out came back with its old reference"
+    );
+    assert_eq!(again, first.1);
+}

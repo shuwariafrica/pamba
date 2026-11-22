@@ -168,13 +168,20 @@ fn perform(due: &[Act]) {
 }
 
 /// `content` as the place the program calls `name`, for an effect to bring into view with
-/// [`bring_into_view`].
+/// [`bring_into_view`] and to ask the keyboard of with [`focus`](crate::focus), which goes to the
+/// first control inside the place that takes it.
 ///
 /// The name is the program's own, as [`named`](crate::named) takes one. A drawing gives one name
-/// to one place. The border draws nothing - no padding, no thickness, no background - and is
+/// to one place, and may give the same name to a control inside or outside it, which `focus` then
+/// asks instead. The border draws nothing - no padding, no thickness, no background - and is
 /// placed as any border is, in a grid's row or with a margin. It holds the place in its automation
-/// identifier, so giving it another undoes the place; no screen reader is shown it, since a border
-/// has no automation peer.
+/// identifier and in its reference, so giving it another of either undoes the place; no screen
+/// reader is shown it, since a border has no automation peer.
+///
+/// The name is asked to be `Clone`, as `named`'s is not, since a place keeps it for two things:
+/// bringing the place into view, which finds the border by its automation identifier, and asking
+/// it the keyboard, through its reference. The bound goes once the layer beneath can bring an
+/// element into view through its reference alone.
 ///
 /// Called while no window of the program is being drawn, it gives a border that is no place.
 ///
@@ -189,10 +196,11 @@ fn perform(due: &[Act]) {
 /// // In the drawing: what the program answered, where it is brought into view.
 /// let notice = pamba_windows::place(Place::Refusal, TextBlock::new().text("That day is full"));
 /// ```
-pub fn place<K: Hash + Eq + 'static>(name: K, content: impl Into<View>) -> Border {
+pub fn place<K: Hash + Eq + Clone + 'static>(name: K, content: impl Into<View>) -> Border {
+    let reference = named::place(name.clone());
     let tag =
         ARRIVALS.with_borrow_mut(|arrivals| arrivals.as_mut().map(|arrivals| arrivals.tag(name)));
-    let border = Border::new().content(content);
+    let border = Border::new().content(content).element_ref(&reference);
     match tag {
         Some(tag) => border.automation_id(&*tag),
         None => border,

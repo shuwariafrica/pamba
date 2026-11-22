@@ -8,8 +8,10 @@
 //! It sets no property and no child of anything the reactor draws, and keeps no reference to one
 //! from one call to the next: it calls only what the person's own input or her screen reader could
 //! have caused, a scroll and words said, and, before a scroll, the layout XAML would make on its
-//! next pass. What it keeps of XAML, the window's root and the registration of the handler that
-//! learns it, is kept for the thread the window stands on, and let go with the window.
+//! next pass. It also refuses the keyboard's leaving a control where [`keep`](crate::keep) says
+//! the keyboard stays. What it keeps of XAML, the window's root and the registrations of the
+//! handlers that learn it and refuse, is kept for the thread the window stands on, and let go with
+//! the window.
 
 use std::cell::RefCell;
 
@@ -18,9 +20,10 @@ use windows_core::{EventRevoker, HSTRING, Interface as _};
 use self::bindings::{
     AutomationNotificationKind, AutomationNotificationProcessing, AutomationPeer,
     AutomationProperties, BringIntoViewOptions, DependencyObject, FocusManager,
-    FocusManagerGotFocusEventArgs, FrameworkElement, FrameworkElementAutomationPeer, Rect,
-    ScrollView, ScrollViewer, UIElement, VisualTreeHelper, XamlRoot,
+    FocusManagerGotFocusEventArgs, FocusState, FrameworkElement, FrameworkElementAutomationPeer,
+    LosingFocusEventArgs, Rect, ScrollView, ScrollViewer, UIElement, VisualTreeHelper, XamlRoot,
 };
+use crate::keep::{self, Moved, Place};
 
 #[allow(
     clippy::all,
@@ -49,6 +52,9 @@ struct Held {
     root: Option<XamlRoot>,
     /// The handler of XAML's static event, removed when this is dropped.
     _listening: EventRevoker,
+    /// The handler that refuses the keyboard's leaving, removed when this is dropped; none where
+    /// XAML refused the registration, and the keyboard then moves as XAML moves it.
+    _keeping: Option<EventRevoker>,
     /// Called the first time the root is known.
     reached: fn(),
 }
@@ -59,7 +65,8 @@ thread_local! {
 }
 
 /// The window stands on this thread: the root of its content is learnt the first time a control
-/// of it takes the keyboard, and `reached` is called then, once.
+/// of it takes the keyboard, and `reached` is called then, once; and from now the keyboard stays
+/// where [`keep::keeps`] says.
 ///
 /// The argument-free read of the focused element gives nothing in a desktop program
 /// (`microsoft-ui-xaml`, `FocusManager.cpp`, `GetFocusedElement`), so the root is learnt from the
@@ -68,10 +75,13 @@ thread_local! {
 pub(crate) fn stands(reached: fn()) {
     // XAML raises the event on this thread, and the handler reaches what is held through it alone.
     let listening = FocusManager::GotFocus(|_, focused| took(focused.as_ref()));
+    // Raised on this thread before the keyboard leaves a control, and refused inside the handler.
+    let keeping = FocusManager::LosingFocus(|_, losing| leaving(losing.as_ref())).ok();
     HELD.with_borrow_mut(|held| {
         *held = listening.ok().map(|listening| Held {
             root: None,
             _listening: listening,
+            _keeping: keeping,
             reached,
         });
     });
@@ -99,6 +109,70 @@ fn took(focused: Option<&FocusManagerGotFocusEventArgs>) {
     if let Some(reached) = first {
         reached();
     }
+}
+
+/// The keyboard is about to leave a control: the leaving is refused where the keyboard stays.
+///
+/// The content each place is judged against is the window's own, read from the element itself,
+/// since the keyboard can move before the root is learnt.
+fn leaving(losing: Option<&LosingFocusEventArgs>) {
+    let Some(losing) = losing else { return };
+    let from = losing.OldFocusedElement().ok();
+    let to = losing.NewFocusedElement().ok();
+    let Some(content) = [to.as_ref(), from.as_ref()]
+        .into_iter()
+        .flatten()
+        .find_map(content_of)
+    else {
+        return;
+    };
+    let moved = match losing.FocusState() {
+        Ok(FocusState::Pointer) => Moved::Pointer,
+        Ok(FocusState::Keyboard) => Moved::Keys,
+        Ok(FocusState::Programmatic) => Moved::Program,
+        _ => Moved::Released,
+    };
+    if keep::keeps(
+        moved,
+        place(from.as_ref(), &content),
+        place(to.as_ref(), &content),
+    ) {
+        // Where XAML will not cancel this leaving, the keyboard moves as it would have.
+        let _ = losing.TryCancel();
+    }
+}
+
+/// The root of what the program drew in the window an element stands in.
+fn content_of(element: &DependencyObject) -> Option<DependencyObject> {
+    element
+        .cast::<UIElement>()
+        .and_then(|element| element.XamlRoot())
+        .and_then(|root| root.Content())
+        .and_then(|content| content.cast::<DependencyObject>())
+        .ok()
+}
+
+/// Where an element stands against the window's content.
+fn place(element: Option<&DependencyObject>, content: &DependencyObject) -> Place {
+    match element {
+        None => Place::Nothing,
+        Some(element) if element == content => Place::Content,
+        Some(element) if beneath(content, element) => Place::Holder,
+        Some(element) if beneath(element, content) => Place::Drawn,
+        Some(_) => Place::Apart,
+    }
+}
+
+/// Whether `upper` stands somewhere above `lower` in the visual tree.
+fn beneath(lower: &DependencyObject, upper: &DependencyObject) -> bool {
+    let mut at = VisualTreeHelper::GetParent(lower).ok();
+    while let Some(here) = at {
+        if here == *upper {
+            return true;
+        }
+        at = VisualTreeHelper::GetParent(&here).ok();
+    }
+    false
 }
 
 fn root() -> Option<XamlRoot> {

@@ -1,0 +1,48 @@
+wait 1500
+front presses
+wait 600
+focus
+find Press
+find Arm a freeze
+find Arm a removal
+find Arm a disabling
+find Bring the press back
+find Twenty drawings
+mark B1 Enter
+key Enter
+wait 800
+mark B1 Space
+key Space
+wait 800
+focus
+mark B1 B2 two Enters a second apart in a freeze
+click Arm a freeze
+wait 400
+chord Shift Tab
+wait 400
+focus
+key Enter
+wait 300
+key Enter
+wait 1000
+key Enter
+wait 3000
+focus
+mark B4 Enter held two seconds
+hold Enter 2000
+wait 1500
+mark B4 Space held two seconds
+hold Space 2000
+wait 1500
+focus
+mark B5 two Enters 100 ms apart
+key Enter
+wait 100
+key Enter
+wait 1500
+mark B5 two Enters 700 ms apart
+key Enter
+wait 700
+key Enter
+wait 1500
+focus
