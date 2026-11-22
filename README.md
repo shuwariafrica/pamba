@@ -79,6 +79,17 @@ the order everything happens in.
 | `pamba` | every platform | The loop. No dependency and no `unsafe`. |
 | `pamba-windows` | Windows | The Windows layer: a program drawn with WinUI 3. Empty elsewhere. |
 
+## Verifying a release
+
+Each release is signed with Pamba's own key, whose fingerprint is
+
+```
+7C96D0926D61D7F76544BD010E0E86A8608B7CC5
+```
+
+[SECURITY.md](https://github.com/shuwariafrica/pamba/blob/main/SECURITY.md) checks a release against it, with a
+GitHub login or without one.
+
 ## Licence
 
 Apache License 2.0
