@@ -14,9 +14,20 @@
 //! which holds the window's content. Either is wrong where it differs from the window's client
 //! rectangle by more than two pixels either way.
 //!
-//! The first argument names the log the lines are appended to. A second, `--induce`, makes the
-//! wrong state on purpose: just before the first line, the content's child window is given the
-//! window's restored size while the window stands maximised.
+//! What the layer tells the program of a window it did not find filled (`Window::on_unfilled`)
+//! is written as one line when it is told, and each placement it is told (`Window::on_placement`)
+//! as another:
+//!
+//! ```text
+//! told: ChildWindow { mends: 1, fills: true }
+//! placed: 1264x672 at 40, 40, maximised true
+//! ```
+//!
+//! The first argument names the log the lines are appended to. A second makes a wrong state on
+//! purpose just before the first line, while the window stands maximised: `--induce` gives the
+//! content's child window the window's restored size; `--induce-layout` gives it that size and
+//! then its own back while its own size messages are held from it, so that the child window
+//! fills the window and what is laid out inside it stays at the restored size.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
@@ -38,6 +49,7 @@ fn main() -> Result<(), pamba_windows::Fault> {
 mod windows {
     use std::ffi::c_void;
     use std::fmt::Write as _;
+    use std::sync::atomic::{AtomicIsize, Ordering};
 
     #[repr(C)]
     #[derive(Clone, Copy, Default)]
@@ -87,6 +99,14 @@ mod windows {
             extended: u32,
             dpi: u32,
         ) -> i32;
+        fn SetWindowLongPtrW(window: *mut c_void, index: i32, value: isize) -> isize;
+        fn CallWindowProcW(
+            previous: isize,
+            window: *mut c_void,
+            message: u32,
+            first: usize,
+            second: isize,
+        ) -> isize;
         fn SetWindowPos(
             window: *mut c_void,
             after: *mut c_void,
@@ -106,6 +126,38 @@ mod windows {
     const STYLE: i32 = -16;
     const EXTENDED_STYLE: i32 = -20;
     const NO_ZORDER_NO_MOVE_NO_ACTIVATE: u32 = 0x0004 | 0x0002 | 0x0010;
+    /// The index of a window's procedure among its values.
+    const PROCEDURE: i32 = -4;
+    /// The messages that tell a window it has a new size.
+    const SIZE: u32 = 0x0005;
+    const POSITION_CHANGED: u32 = 0x0047;
+
+    /// The content's child window's own procedure while `held` stands in for it.
+    static PREVIOUS: AtomicIsize = AtomicIsize::new(0);
+
+    /// Stands in for the content's child window's procedure while its size is given back: what
+    /// tells it its size is not passed on, and everything else is.
+    unsafe extern "system" fn held(
+        window: *mut c_void,
+        message: u32,
+        first: usize,
+        second: isize,
+    ) -> isize {
+        if message == SIZE || message == POSITION_CHANGED {
+            return 0;
+        }
+        // SAFETY: `PREVIOUS` holds the procedure Windows gave back when this one was set, on this
+        // thread, and that procedure stands until it is set back.
+        unsafe {
+            CallWindowProcW(
+                PREVIOUS.load(Ordering::Relaxed),
+                window,
+                message,
+                first,
+                second,
+            )
+        }
+    }
 
     unsafe extern "system" fn gather(window: *mut c_void, held: isize) -> i32 {
         // SAFETY: `held` is the address of the vector `windows` lends for the length of the call
@@ -216,15 +268,8 @@ mod windows {
         line
     }
 
-    /// Gives the content's child window the window's restored client size while it stands
-    /// maximised, and says what it did.
-    pub(super) fn induce() -> String {
-        let Some(window) = top() else {
-            return "induce: no visible window on this thread".to_owned();
-        };
-        let Some(child) = content(window) else {
-            return "induce: the window has no child window that holds its content".to_owned();
-        };
+    /// The client size `window` has when restored, in its own pixels.
+    fn restored(window: *mut c_void) -> (i32, i32) {
         let mut placement = Placement {
             length: u32::try_from(size_of::<Placement>()).unwrap_or(0),
             ..Placement::default()
@@ -232,7 +277,7 @@ mod windows {
         let mut frame = Rect::default();
         // SAFETY: each call writes only the structure it is handed, sized as it expects, and reads
         // the window by a handle Windows just gave.
-        let moved = unsafe {
+        unsafe {
             GetWindowPlacement(window, &raw mut placement);
             #[allow(
                 clippy::cast_possible_truncation,
@@ -246,11 +291,18 @@ mod windows {
                 GetWindowLongPtrW(window, EXTENDED_STYLE) as u32,
                 GetDpiForWindow(window),
             );
-            let width =
-                (placement.normal.right - placement.normal.left) - (frame.right - frame.left);
-            let height =
-                (placement.normal.bottom - placement.normal.top) - (frame.bottom - frame.top);
-            let moved = SetWindowPos(
+            (
+                (placement.normal.right - placement.normal.left) - (frame.right - frame.left),
+                (placement.normal.bottom - placement.normal.top) - (frame.bottom - frame.top),
+            )
+        }
+    }
+
+    /// Gives `child` the size `(width, height)`, and says whether Windows did.
+    fn resize(child: *mut c_void, (width, height): (i32, i32)) -> bool {
+        // SAFETY: `child` is a handle Windows just gave; the call keeps nothing.
+        unsafe {
+            SetWindowPos(
                 child,
                 std::ptr::null_mut(),
                 0,
@@ -258,15 +310,62 @@ mod windows {
                 width,
                 height,
                 NO_ZORDER_NO_MOVE_NO_ACTIVATE,
-            );
-            (width, height, moved != 0)
+            ) != 0
+        }
+    }
+
+    /// Gives the content's child window the window's restored client size while it stands
+    /// maximised, and says what it did.
+    pub(super) fn induce() -> String {
+        let Some(window) = top() else {
+            return "induce: no visible window on this thread".to_owned();
         };
+        let Some(child) = content(window) else {
+            return "induce: the window has no child window that holds its content".to_owned();
+        };
+        let small = restored(window);
+        let done = resize(child, small);
         format!(
-            "induce: {} given {}x{} px, the restored client size: done {}",
+            "induce: {} given {}x{} px, the restored client size: done {done}",
             class(child),
-            moved.0,
-            moved.1,
-            moved.2
+            small.0,
+            small.1,
+        )
+    }
+
+    /// Gives the content's child window the window's restored client size, then its own size
+    /// back while its own size messages are held from it, and says what it did.
+    pub(super) fn induce_layout() -> String {
+        let Some(window) = top() else {
+            return "induce layout: no visible window on this thread".to_owned();
+        };
+        let Some(child) = content(window) else {
+            return "induce layout: the window has no child window that holds its content"
+                .to_owned();
+        };
+        let full = client(child);
+        let small = restored(window);
+        let shrunk = resize(child, small);
+        let Ok(standing) = isize::try_from((held as *const ()).addr()) else {
+            return "induce layout: the procedure's address does not fit".to_owned();
+        };
+        // SAFETY: the child window is this thread's, so its procedure is called on this thread
+        // alone, and `held` passes on through `PREVIOUS` every message it does not hold, which is
+        // set before Windows can call `held` and stands until the procedure is set back.
+        let previous = unsafe { SetWindowLongPtrW(child, PROCEDURE, standing) };
+        PREVIOUS.store(previous, Ordering::Relaxed);
+        let grown = previous != 0 && resize(child, full);
+        if previous != 0 {
+            // SAFETY: as above; the child's own procedure is set back.
+            unsafe { SetWindowLongPtrW(child, PROCEDURE, previous) };
+        }
+        format!(
+            "induce layout: {} given {}x{} px, then {}x{} px with its size messages held: done {shrunk} {grown}",
+            class(child),
+            small.0,
+            small.1,
+            full.0,
+            full.1,
         )
     }
 }
@@ -284,9 +383,9 @@ mod shown {
         Border, HorizontalAlignment, TextBlock, ThemeBrush, VerticalAlignment, WindowPlacement,
         WindowSize, WindowVisuals,
     };
-    use pamba_windows::{Fault, Messages, Window};
+    use pamba_windows::{Fault, Messages, Unfilled, Window};
 
-    use crate::windows::{induce, reading};
+    use crate::windows::{induce, induce_layout, reading};
 
     /// When the lines are written, after Windows first tells the window's size.
     const FIRST: Duration = Duration::from_millis(500);
@@ -295,20 +394,30 @@ mod shown {
     struct Fill {
         reported: Option<WindowSize>,
         reads: u32,
-        induce: bool,
+        induce: Option<Induce>,
+    }
+
+    /// Which wrong state is made on purpose.
+    #[derive(Clone, Copy, Debug)]
+    enum Induce {
+        ChildWindow,
+        Layout,
     }
 
     #[derive(Clone, Copy, Debug)]
     enum Message {
         Sized(WindowSize),
         Read,
+        Told(Unfilled),
+        Placed(WindowPlacement),
     }
 
     #[derive(Debug)]
     enum Effect {
         Later(Duration),
-        Induce,
+        Induce(Induce),
         Read(u32, Option<(f64, f64)>),
+        Note(String),
     }
 
     impl Program for Fill {
@@ -332,8 +441,8 @@ mod shown {
                     self.reads += 1;
                     let reported = self.reported.map(|size| (size.width, size.height));
                     let mut effects = Vec::new();
-                    if self.reads == 1 && self.induce {
-                        effects.push(Effect::Induce);
+                    if let (1, Some(induce)) = (self.reads, self.induce) {
+                        effects.push(Effect::Induce(induce));
                     }
                     effects.push(Effect::Read(self.reads, reported));
                     if self.reads == 1 {
@@ -341,6 +450,11 @@ mod shown {
                     }
                     effects
                 }
+                Message::Told(told) => vec![Effect::Note(format!("told: {told:?}"))],
+                Message::Placed(placed) => vec![Effect::Note(format!(
+                    "placed: {}x{} at {}, {}, maximised {}",
+                    placed.width, placed.height, placed.x, placed.y, placed.maximized
+                ))],
             }
         }
     }
@@ -370,7 +484,9 @@ mod shown {
                         let _ = messages.send(Message::Read);
                     });
                 }
-                Effect::Induce => self.note(&induce()),
+                Effect::Induce(Induce::ChildWindow) => self.note(&induce()),
+                Effect::Induce(Induce::Layout) => self.note(&induce_layout()),
+                Effect::Note(line) => self.note(&line),
                 Effect::Read(read, reported) => {
                     // The induced size reaches the content a moment after the call.
                     if read == 1 {
@@ -403,6 +519,8 @@ mod shown {
                 maximized: true,
             }))
             .on_size(messages.callback(Message::Sized))
+            .on_unfilled(messages.callback(Message::Told))
+            .on_placement(messages.callback(Message::Placed))
     }
 
     pub(super) fn run() -> Result<(), Fault> {
@@ -410,14 +528,18 @@ mod shown {
         let log = arguments
             .next()
             .map_or_else(|| PathBuf::from("fill.log"), PathBuf::from);
-        let induce = arguments.next().is_some_and(|switch| switch == "--induce");
+        let induce = arguments.next().and_then(|switch| match switch.to_str() {
+            Some("--induce") => Some(Induce::ChildWindow),
+            Some("--induce-layout") => Some(Induce::Layout),
+            _ => None,
+        });
         let hand = Hand { log: log.clone() };
         hand.note(&format!(
             "fill starts{}",
-            if induce {
-                ", to induce the wrong state"
-            } else {
-                ""
+            match induce {
+                Some(Induce::ChildWindow) => ", to induce the wrong state",
+                Some(Induce::Layout) => ", to induce the wrong layout",
+                None => "",
             }
         ));
         let ended = pamba_windows::run(

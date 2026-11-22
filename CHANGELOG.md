@@ -19,7 +19,9 @@ carries over.
 - `pamba-windows`, the Windows layer. `run` opens a program's window, drawn with WinUI 3 through
   Microsoft's `windows-reactor`, whose controls are all under `ui`. A moment after the window first
   stands, the layer checks that its content fills it, and where it does not, has Windows tell the
-  window its size again. `Messages` turns what a control
+  window its size again. The check reads the size the content is laid out at as well as the size
+  of its child window, and `Window::on_unfilled` tells the program what it found and mended.
+  `Messages` turns what a control
   reports into a message of the program's, and `Messages::routed` lets a program take a key or a
   pointer for itself. `named` gives a control a name of the program's, and `focus` stands the
   keyboard at it once the drawing after the step stands, asking again for a control Windows shows a

@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::error::Error;
 use std::fmt;
 use std::num::NonZeroUsize;
@@ -7,15 +7,17 @@ use std::sync::Arc;
 
 use pamba::{Dispatcher, Loop, Performer, Program};
 use windows_reactor::{
-    App, Border, Callback, Component, ComponentContext, ComponentTimer, FocusEventInfo,
-    LocalSender, RoutedCallback, View, ViewContext,
+    App, Border, Callback, Component, ComponentContext, ComponentTimer, CompositionHostEvent,
+    ElementObservation, ElementRef, FocusEventInfo, Grid, LocalSender, RoutedCallback, View,
+    ViewContext,
 };
 
 use crate::arrive;
 use crate::beside::{self, WindowHandle};
-use crate::fill::{self, Checked};
+use crate::fill::{self, Checked, LaidOut, Sequence};
 use crate::named;
 use crate::threads::Threads;
+use crate::unfilled::Unfilled;
 use crate::watch;
 use crate::window::Window;
 use crate::window_thread;
@@ -143,8 +145,16 @@ struct Host<P: Program, W: Performer<P>, V> {
     pause: Option<ComponentTimer>,
     /// The pause before the window's content is next checked, while it runs.
     fill: Option<ComponentTimer>,
-    /// How many times the window was made to take its size again.
-    mends: u32,
+    /// How far the checking of the window's content has come since the window first stood.
+    checked: Sequence,
+    /// The layer's own element around the program's content, whose laid-out size is observed.
+    laid: ElementRef<Grid>,
+    /// The observation of `laid`, held for the window's life: dropped, it ends.
+    _laying: ElementObservation,
+    /// The last laid-out size the observation gave; none until the first.
+    laid_out: Rc<Cell<Option<LaidOut>>>,
+    /// Told what the checking found, as the latest drawing asks.
+    unfilled: RefCell<Option<Callback<Unfilled>>>,
 }
 
 impl<P, W, V> Host<P, W, V>
@@ -222,6 +232,27 @@ where
         window_thread::stands(move || waking.wake());
         Self::hand(context);
         watch::stands();
+        let laid = ElementRef::<Grid>::new();
+        let laid_out = Rc::new(Cell::new(None));
+        let given = Rc::clone(&laid_out);
+        let laying = laid.observe_composition_host(move |event| {
+            let (CompositionHostEvent::Ready {
+                width,
+                height,
+                scale,
+                ..
+            }
+            | CompositionHostEvent::Metrics {
+                width,
+                height,
+                scale,
+            }) = event;
+            given.set(Some(LaidOut {
+                width,
+                height,
+                scale,
+            }));
+        });
         Self {
             running,
             view: parts.view,
@@ -229,7 +260,11 @@ where
             took: Callback::new(|_: FocusEventInfo| named::took()),
             pause: None,
             fill: None,
-            mends: 0,
+            checked: Sequence::default(),
+            laid,
+            _laying: laying,
+            laid_out,
+            unfilled: RefCell::new(None),
         }
     }
 
@@ -245,12 +280,16 @@ where
                 self.fill = Some(context.set_timeout(fill::FIRST, Event::Check));
             }
             Event::Check => {
-                self.fill = match fill::check(self.mends) {
-                    Checked::Mended => {
-                        self.mends += 1;
-                        Some(context.set_timeout(fill::BETWEEN, Event::Check))
+                self.fill = match fill::check(&mut self.checked, self.laid_out.get()) {
+                    Checked::Again => Some(context.set_timeout(fill::BETWEEN, Event::Check)),
+                    Checked::Ended(told) => {
+                        if let (Some(told), Some(unfilled)) =
+                            (told, self.unfilled.borrow().as_ref())
+                        {
+                            unfilled.call(told);
+                        }
+                        None
                     }
-                    Checked::Stands | Checked::Left => None,
                 };
             }
             // More may wait: a burst beyond one hand-over, or work asked from inside work.
@@ -293,6 +332,7 @@ where
         }
         // The reactor reports the colour mode alone, so the mode goes to the watch, which reads
         // what else decides how Windows draws and tells the program of the two as one fact.
+        self.unfilled.replace(window.unfilled);
         let asks = window.appeared.is_some();
         watch::asks(window.appeared);
         if asks {
@@ -307,7 +347,11 @@ where
         // is known to be on the screen: an ask made before then is carried out at that.
         Border::new()
             .on_got_focus(self.took.clone())
-            .content(window.content)
+            .content(
+                Grid::new()
+                    .element_ref(&self.laid)
+                    .children([window.content]),
+            )
             .into()
     }
 }

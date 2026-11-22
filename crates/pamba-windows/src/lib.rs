@@ -10,7 +10,8 @@
 //! clipboard. Other threads ask work of the window's thread through `WindowThread`, which runs it
 //! there with the window's `WindowHandle`: `bring_forward` brings the window in front of the
 //! others. Where WinUI itself cannot start, so that no window of the program can say so,
-//! `tell` says it through Windows. Microsoft's
+//! `tell` says it through Windows. A window whose content does not fill it when it first stands is
+//! mended, and the program is told through `Window::on_unfilled`. Microsoft's
 //! `windows-reactor` draws beneath this crate, and a program names this crate alone: a fault of
 //! the layer beneath is mended here, once, for every program.
 //!
@@ -32,6 +33,7 @@ mod named;
 mod tell;
 mod threads;
 pub mod ui;
+mod unfilled;
 mod watch;
 mod window;
 mod window_thread;
@@ -43,5 +45,6 @@ pub use clipboard::{Uncopied, copy};
 pub use host::{Fault, Messages, run};
 pub use named::{focus, named};
 pub use tell::tell;
+pub use unfilled::Unfilled;
 pub use window::Window;
 pub use window_thread::{Unrun, WindowThread};
