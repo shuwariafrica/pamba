@@ -77,6 +77,7 @@ the order everything happens in.
 | Crate | Builds on | What it is |
 | --- | --- | --- |
 | `pamba` | every platform | The loop. No dependency and no `unsafe`. |
+| `pamba-host` | every platform | What a program asks of its computer, with no window: leaving the screen to another person. |
 | `pamba-windows` | Windows | The Windows layer: a program drawn with WinUI 3. Empty elsewhere. |
 
 ## Verifying a release

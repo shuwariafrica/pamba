@@ -1,0 +1,15 @@
+[package]
+name = "switch"
+description = "Whether this computer offers to leave the screen to another person, and why, and the act itself"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+pamba-host.workspace = true
+
+[lints]
+workspace = true

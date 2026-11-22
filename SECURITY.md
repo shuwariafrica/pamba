@@ -17,9 +17,9 @@ pamba's own, whose fingerprint is
 7C96D0926D61D7F76544BD010E0E86A8608B7CC5
 ```
 
-pamba is three crates, each released under the same tag: `pamba`, `pamba-windows` and
-`pamba-windows-build`. In a new, empty directory, fetch the one you are verifying, with `<crate>`
-here and below its name and `<version>` its version:
+pamba is four crates, each released under the same tag: `pamba`, `pamba-host`, `pamba-windows`
+and `pamba-windows-build`. In a new, empty directory, fetch the one you are verifying, with
+`<crate>` here and below its name and `<version>` its version:
 
 ```
 curl -fsSLo <crate>-<version>.crate https://static.crates.io/crates/<crate>/<crate>-<version>.crate

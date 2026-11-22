@@ -118,6 +118,10 @@ name = "pamba"
 version = "0.4.0"
 
 [[package]]
+name = "pamba-host"
+version = "0.4.0"
+
+[[package]]
 name = "pamba-windows"
 version = "0.4.0"
 dependencies = [
@@ -171,6 +175,13 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
+]
+
+[[package]]
+name = "switch"
+version = "0.4.0"
+dependencies = [
+ "pamba-host",
 ]
 
 [[package]]

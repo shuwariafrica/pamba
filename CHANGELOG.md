@@ -16,6 +16,12 @@ carries over.
   second thread. `Places` keeps, for a platform's layer, the places a program names from one
   drawing to the next, and retries an ask the platform cannot carry out yet. `Sender::wrapping`
   gives a part of a program a sender for its own messages, made from the whole's by a function.
+- `pamba-host`, what a program asks of the computer it runs on, with no window and no drawing, on
+  every platform. `session::switch_user` says once whether the computer offers to leave the screen
+  to another person: the act, `SwitchUser`, whose `now` leaves the screen and answers `Stayed`
+  where the platform refused, or `Unoffered`, which says why not. On Windows it is offered where the
+  administrator has not hidden switching and another person can sign in: more than one enabled
+  account, or a computer joined to a domain or to Entra.
 - `pamba-windows`, the Windows layer. `run` opens a program's window, drawn with WinUI 3 through
   Microsoft's `windows-reactor`, whose controls are all under `ui`. A moment after the window first
   stands, the layer checks that its content fills it, and where it does not, has Windows tell the
