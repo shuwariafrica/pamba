@@ -17,7 +17,9 @@ carries over.
   drawing to the next, and retries an ask the platform cannot carry out yet. `Sender::wrapping`
   gives a part of a program a sender for its own messages, made from the whole's by a function.
 - `pamba-windows`, the Windows layer. `run` opens a program's window, drawn with WinUI 3 through
-  Microsoft's `windows-reactor`, whose controls are all under `ui`. `Messages` turns what a control
+  Microsoft's `windows-reactor`, whose controls are all under `ui`. A moment after the window first
+  stands, the layer checks that its content fills it, and where it does not, has Windows tell the
+  window its size again. `Messages` turns what a control
   reports into a message of the program's, and `Messages::routed` lets a program take a key or a
   pointer for itself. `named` gives a control a name of the program's, and `focus` stands the
   keyboard at it once the drawing after the step stands, asking again for a control Windows shows a

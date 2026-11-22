@@ -13,6 +13,7 @@ use windows_reactor::{
 
 use crate::arrive;
 use crate::beside;
+use crate::fill::{self, Checked};
 use crate::named;
 use crate::threads::Threads;
 use crate::watch;
@@ -99,6 +100,8 @@ pub(crate) enum Event<M> {
     Pause,
     /// That pause is over.
     Paused,
+    /// The window's content is to be checked against the window.
+    Check,
 }
 
 struct Parts<P: Program, W, V> {
@@ -134,6 +137,10 @@ struct Host<P: Program, W: Performer<P>, V> {
     /// The pause before a refused ask of a named control is made again, while it runs: dropped,
     /// it is cancelled.
     pause: Option<ComponentTimer>,
+    /// The pause before the window's content is next checked, while it runs.
+    fill: Option<ComponentTimer>,
+    /// How many times the window was made to take its size again.
+    mends: u32,
 }
 
 impl<P, W, V> Host<P, W, V>
@@ -191,6 +198,8 @@ where
             threads,
             took: Callback::new(|_: FocusEventInfo| named::took()),
             pause: None,
+            fill: None,
+            mends: 0,
         }
     }
 
@@ -201,7 +210,18 @@ where
                 self.running.turn(TURN);
                 Self::wait(&self.threads, context);
             }
-            Event::Opened => {}
+            Event::Opened => {
+                self.fill = Some(context.set_timeout(fill::FIRST, Event::Check));
+            }
+            Event::Check => {
+                self.fill = match fill::check(self.mends) {
+                    Checked::Mended => {
+                        self.mends += 1;
+                        Some(context.set_timeout(fill::BETWEEN, Event::Check))
+                    }
+                    Checked::Stands | Checked::Left => None,
+                };
+            }
             // One ask is retried at a time: a pause still running is for an ask since replaced.
             Event::Pause => {
                 self.pause = Some(context.set_timeout(named::PAUSE, Event::Paused));

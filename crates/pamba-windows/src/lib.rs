@@ -24,6 +24,7 @@ mod beside;
 mod clipboard;
 mod contrast;
 mod days;
+mod fill;
 mod host;
 mod named;
 mod tell;
